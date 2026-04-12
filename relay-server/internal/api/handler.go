@@ -2,25 +2,45 @@ package api
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/relayhq/relay-server/internal/auth"
 	"github.com/relayhq/relay-server/internal/config"
 	"github.com/relayhq/relay-server/internal/hub"
 	"github.com/relayhq/relay-server/internal/protocol"
+	"github.com/relayhq/relay-server/internal/ratelimit"
 )
 
 // Handler holds the REST API route handlers.
 type Handler struct {
-	hub *hub.Hub
-	cfg *config.Config
+	hub            *hub.Hub
+	cfg            *config.Config
+	publishLimiter *ratelimit.Limiter
 }
 
 // NewHandler creates an API handler.
 func NewHandler(h *hub.Hub, cfg *config.Config) *Handler {
-	return &Handler{hub: h, cfg: cfg}
+	return &Handler{
+		hub:            h,
+		cfg:            cfg,
+		publishLimiter: ratelimit.NewLimiter(1000, 1*time.Minute),
+	}
+}
+
+// RateLimitMiddleware checks the publish rate limit per IP.
+func (h *Handler) RateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ip := extractIP(r)
+		if !h.publishLimiter.Allow(ip) {
+			jsonError(w, http.StatusTooManyRequests, "rate limit exceeded")
+			return
+		}
+		next(w, r)
+	}
 }
 
 // AuthenticateMiddleware returns a wrapper that checks Bearer {appSecret}.
@@ -159,4 +179,12 @@ func jsonError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(map[string]string{"error": message})
+}
+
+func extractIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }

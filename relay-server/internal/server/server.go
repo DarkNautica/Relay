@@ -59,10 +59,11 @@ func (s *Server) buildRouter() http.Handler {
 	// REST API — authenticated with Bearer {appSecret}
 	apiHandler := api.NewHandler(s.hub, s.cfg)
 	auth := apiHandler.AuthenticateMiddleware
+	rl := apiHandler.RateLimitMiddleware
 
 	appsRouter := r.PathPrefix("/apps/{appId}").Subrouter()
-	appsRouter.HandleFunc("/events", auth(apiHandler.PublishEvent)).Methods(http.MethodPost)
-	appsRouter.HandleFunc("/events/batch", auth(apiHandler.PublishBatch)).Methods(http.MethodPost)
+	appsRouter.HandleFunc("/events", rl(auth(apiHandler.PublishEvent))).Methods(http.MethodPost)
+	appsRouter.HandleFunc("/events/batch", rl(auth(apiHandler.PublishBatch))).Methods(http.MethodPost)
 	appsRouter.HandleFunc("/channels", auth(apiHandler.GetChannels)).Methods(http.MethodGet)
 	appsRouter.HandleFunc("/channels/{channelName}", auth(apiHandler.GetChannel)).Methods(http.MethodGet)
 	appsRouter.HandleFunc("/channels/{channelName}/users", auth(apiHandler.GetChannelUsers)).Methods(http.MethodGet)

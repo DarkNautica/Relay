@@ -48,6 +48,7 @@ func main() {
 	<-quit
 
 	log.Println("[Relay] Shutting down gracefully...")
+	h.Shutdown()
 	srv.Shutdown()
 	log.Println("[Relay] Goodbye.")
 }

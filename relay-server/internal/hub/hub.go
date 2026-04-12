@@ -453,6 +453,40 @@ func (h *Hub) GetEventLog(n int) []EventLogEntry {
 	return result
 }
 
+// Shutdown broadcasts a shutdown error to all connected clients,
+// waits 1 second for delivery, then closes all client send channels.
+func (h *Hub) Shutdown() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	errMsg, err := protocol.NewMessage(protocol.EventError, "", protocol.ErrorData{
+		Code:    4200,
+		Message: "Server shutting down",
+	})
+	if err != nil {
+		return
+	}
+	data, err := errMsg.Encode()
+	if err != nil {
+		return
+	}
+
+	for _, client := range h.clients {
+		select {
+		case client.send <- data:
+		default:
+		}
+	}
+
+	// Give clients 1 second to receive the shutdown message
+	time.Sleep(1 * time.Second)
+
+	for socketID, client := range h.clients {
+		close(client.send)
+		delete(h.clients, socketID)
+	}
+}
+
 // RegisterClient is called by the WebSocket handler to register a new connection.
 func (h *Hub) RegisterClient(client *Client) {
 	h.register <- client
