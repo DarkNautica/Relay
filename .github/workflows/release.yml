@@ -112,11 +112,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v6
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
         with:
           context: relay-server
           file: relay-server/Dockerfile
           push: true
+          no-cache: true
           platforms: linux/amd64,linux/arm64
           tags: |
             relayhq/relay:latest
