@@ -4,97 +4,232 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>API Reference — Relay Docs</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <script>document.addEventListener('DOMContentLoaded',()=>hljs.highlightAll())</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #0f1117; --bg-card: #161922; --border: #2a2d3a;
-      --text: #e4e4e7; --text-dim: #9ca3af; --accent: #6366f1; --accent-hover: #818cf8;
-      --green: #22c55e; --yellow: #eab308; --blue: #3b82f6;
-      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      --mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
-      --sidebar-w: 240px;
+      --bg: #0a0a0f; --surface: #111118; --border: #1e1e2e;
+      --accent: #6366f1; --accent-hover: #818cf8; --accent-glow: rgba(99,102,241,0.15);
+      --text: #f8fafc; --text-secondary: #94a3b8;
+      --green: #22c55e; --amber: #f59e0b; --code-bg: #0d1117;
+      --font: 'Inter', system-ui, -apple-system, sans-serif;
+      --mono: 'JetBrains Mono', 'SF Mono', monospace;
+      --sidebar-w: 260px;
+      --str: #a5d6ff; --kw: #ff7b72; --cmt: #8b949e; --var: #ffa657; --code-text: #e6edf3;
     }
     html { scroll-behavior: smooth; }
-    body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.7; }
-    a { color: var(--accent); text-decoration: none; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.7; -webkit-font-smoothing: antialiased; }
+    a { color: var(--accent); text-decoration: none; transition: color 0.15s; }
     a:hover { color: var(--accent-hover); }
-    nav { position: fixed; top: 0; width: 100%; background: rgba(15,17,23,0.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); z-index: 100; height: 56px; display: flex; align-items: center; padding: 0 24px; }
-    .nav-inner { max-width: 1200px; margin: 0 auto; width: 100%; display: flex; align-items: center; justify-content: space-between; }
-    .nav-logo { font-size: 18px; font-weight: 700; color: var(--text); }
-    .nav-logo span { color: var(--accent); }
-    .nav-links { display: flex; gap: 24px; }
-    .nav-links a { color: var(--text-dim); font-size: 14px; font-weight: 500; }
+
+    /* Nav */
+    nav { position: fixed; top: 0; width: 100%; background: rgba(10,10,15,0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); z-index: 100; height: 60px; }
+    .nav-inner { max-width: 1200px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 100%; }
+    .nav-logo { font-size: 18px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .nav-logo svg { color: var(--accent); }
+    .nav-links { display: flex; gap: 32px; align-items: center; }
+    .nav-links a { color: var(--text-secondary); font-size: 14px; font-weight: 500; }
     .nav-links a:hover { color: var(--text); }
-    .layout { display: flex; margin-top: 56px; }
-    .sidebar { position: fixed; top: 56px; left: 0; width: var(--sidebar-w); height: calc(100vh - 56px); overflow-y: auto; padding: 24px 16px; border-right: 1px solid var(--border); background: var(--bg); }
-    .sidebar h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin: 20px 0 8px; }
-    .sidebar h4:first-child { margin-top: 0; }
-    .sidebar a { display: block; padding: 5px 12px; font-size: 14px; color: var(--text-dim); border-radius: 6px; margin-bottom: 2px; }
-    .sidebar a:hover, .sidebar a.active { background: var(--bg-card); color: var(--text); }
-    .sidebar a.active { color: var(--accent); }
-    .content { margin-left: var(--sidebar-w); flex: 1; max-width: 860px; padding: 40px 48px 80px; }
-    .content h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
-    .content h2 { font-size: 24px; font-weight: 600; margin-top: 48px; margin-bottom: 16px; padding-top: 24px; border-top: 1px solid var(--border); }
-    .content h3 { font-size: 18px; font-weight: 600; margin-top: 32px; margin-bottom: 12px; }
-    .content p { margin-bottom: 16px; color: var(--text-dim); }
-    .content code { background: var(--bg-card); padding: 2px 6px; border-radius: 4px; font-family: var(--mono); font-size: 13px; }
-    .content pre { margin-bottom: 20px; border-radius: 8px; border: 1px solid var(--border); overflow-x: auto; }
-    .content pre code { background: none; padding: 16px; display: block; font-size: 13px; line-height: 1.6; }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 24px; }
-    th { background: var(--bg-card); text-align: left; padding: 10px 14px; font-weight: 600; border-bottom: 2px solid var(--border); }
-    td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text-dim); }
-    td code { background: var(--bg-card); padding: 1px 5px; border-radius: 3px; font-family: var(--mono); font-size: 12px; }
+    .nav-gh { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary) !important; transition: border-color 0.15s, color 0.15s; }
+    .nav-gh:hover { border-color: #3a3a4a; color: var(--text) !important; }
+    .nav-gh svg { width: 16px; height: 16px; }
+    .hamburger { display: none; background: none; border: none; color: var(--text); cursor: pointer; padding: 4px; }
 
-    .endpoint { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin-bottom: 28px; }
-    .endpoint-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-    .method { padding: 3px 10px; border-radius: 4px; font-weight: 700; font-size: 12px; text-transform: uppercase; font-family: var(--mono); }
-    .method-post { background: rgba(34,197,94,0.15); color: var(--green); }
-    .method-get { background: rgba(59,130,246,0.15); color: var(--blue); }
-    .endpoint-path { font-family: var(--mono); font-size: 14px; font-weight: 600; }
-    .endpoint-auth { font-size: 12px; color: var(--yellow); margin-left: auto; }
-    .endpoint p { font-size: 14px; color: var(--text-dim); margin-bottom: 12px; }
+    /* Layout */
+    .layout { display: flex; margin-top: 60px; min-height: calc(100vh - 60px); }
 
-    @media (max-width: 768px) { .sidebar { display: none; } .content { margin-left: 0; padding: 24px 16px 60px; } }
+    /* Sidebar */
+    .sidebar { position: fixed; top: 60px; left: 0; width: var(--sidebar-w); height: calc(100vh - 60px); overflow-y: auto; padding: 28px 16px; border-right: 1px solid var(--border); background: var(--bg); }
+    .sidebar-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); padding: 0 12px; margin-bottom: 16px; }
+    .sidebar-group { margin-bottom: 24px; }
+    .sidebar-group-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); padding: 0 12px; margin-bottom: 6px; }
+    .sidebar a { display: block; padding: 6px 12px; font-size: 14px; color: var(--text-secondary); border-radius: 6px; margin-bottom: 1px; border-left: 2px solid transparent; transition: all 0.15s; }
+    .sidebar a:hover { background: var(--surface); color: var(--text); }
+    .sidebar a.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-glow); }
+
+    /* Mobile sidebar toggle */
+    .mobile-doc-nav { display: none; position: sticky; top: 60px; z-index: 50; background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 16px; }
+    .mobile-doc-btn { background: none; border: 1px solid var(--border); color: var(--text-secondary); font-family: var(--font); font-size: 13px; padding: 6px 14px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+    .mobile-doc-dropdown { display: none; padding: 8px 0; }
+    .mobile-doc-dropdown.open { display: block; }
+    .mobile-doc-dropdown a { display: block; padding: 8px 14px; font-size: 14px; color: var(--text-secondary); }
+    .mobile-doc-dropdown a.active { color: var(--accent); }
+
+    /* Content */
+    .content { margin-left: var(--sidebar-w); flex: 1; max-width: 860px; padding: 48px 56px 100px; }
+
+    /* Page hero */
+    .page-hero { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 32px; margin-bottom: 40px; }
+    .page-hero h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 8px; }
+    .page-hero p { color: var(--text-secondary); font-size: 16px; margin: 0; }
+
+    /* Typography */
+    .content h2 { font-size: 22px; font-weight: 700; margin-top: 56px; margin-bottom: 16px; padding-top: 28px; border-top: 1px solid var(--border); letter-spacing: -0.02em; display: flex; align-items: center; gap: 12px; }
+    .content h2:first-of-type { margin-top: 0; border-top: none; padding-top: 0; }
+    .content h3 { font-size: 16px; font-weight: 600; margin-top: 28px; margin-bottom: 10px; letter-spacing: -0.01em; }
+    .content p { margin-bottom: 16px; color: var(--text-secondary); font-size: 15px; line-height: 1.7; }
+    .content > code, .content p code, .content li code, .content td code { background: var(--surface); padding: 2px 7px; border-radius: 4px; font-family: var(--mono); font-size: 13px; border: 1px solid var(--border); }
+
+    /* Auth callout */
+    .auth-callout { display: flex; gap: 16px; background: var(--surface); border: 1px solid var(--accent); border-radius: 10px; padding: 20px 24px; margin-bottom: 32px; }
+    .auth-callout svg { flex-shrink: 0; color: var(--accent); margin-top: 2px; }
+    .auth-callout-body p { margin: 0 0 8px; font-size: 14px; color: var(--text-secondary); line-height: 1.7; }
+    .auth-callout-body p:last-child { margin-bottom: 0; }
+    .auth-callout-body code { background: rgba(99,102,241,0.1); border-color: rgba(99,102,241,0.2); }
+
+    /* Code blocks */
+    .code-wrap { position: relative; margin-bottom: 20px; }
+    .code-wrap pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; overflow-x: auto; margin: 0; }
+    .code-wrap pre code { font-family: var(--mono); font-size: 14px; line-height: 1.7; color: var(--code-text); background: none; padding: 0; border: none; display: block; }
+    .code-lang { position: absolute; top: 8px; right: 48px; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); background: var(--surface); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); }
+    .code-copy { position: absolute; top: 8px; right: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; cursor: pointer; color: var(--text-secondary); font-size: 12px; font-family: var(--font); transition: all 0.15s; display: flex; align-items: center; gap: 4px; }
+    .code-copy:hover { color: var(--text); border-color: #3a3a4a; }
+    .code-copy svg { width: 14px; height: 14px; }
+
+    /* Syntax */
+    .code-wrap .s { color: var(--str); }
+    .code-wrap .k { color: var(--kw); }
+    .code-wrap .c { color: var(--cmt); font-style: italic; }
+    .code-wrap .v { color: var(--var); }
+
+    /* Endpoint cards */
+    .endpoint { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; margin-bottom: 24px; transition: border-color 0.2s; }
+    .endpoint:hover { border-color: #2a2a3e; }
+    .endpoint-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .method { padding: 4px 12px; border-radius: 6px; font-weight: 700; font-size: 12px; text-transform: uppercase; font-family: var(--mono); letter-spacing: 0.03em; }
+    .method-post { background: rgba(99,102,241,0.15); color: #6366f1; }
+    .method-get { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .endpoint-path { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--text); }
+    .endpoint-auth { font-size: 12px; font-weight: 500; color: var(--amber); margin-left: auto; display: flex; align-items: center; gap: 5px; padding: 3px 10px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2); border-radius: 999px; }
+    .endpoint p { font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.7; }
+    .endpoint-label { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px; display: block; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+    th { background: var(--surface); text-align: left; padding: 10px 16px; font-weight: 600; font-size: 13px; color: var(--text); border-bottom: 1px solid var(--border); }
+    td { padding: 10px 16px; border-bottom: 1px solid var(--border); color: var(--text-secondary); font-size: 14px; }
+    tr:last-child td { border-bottom: none; }
+    td code { font-family: var(--mono); font-size: 13px; }
+
+    /* Protocol tables */
+    .proto-table { margin-top: 12px; }
+    .proto-table td:first-child code { color: var(--accent); }
+
+    /* Footer */
+    footer { border-top: 1px solid var(--border); padding: 32px 24px; background: var(--surface); margin-left: var(--sidebar-w); }
+    .footer-inner { max-width: 860px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    .footer-brand { font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+    .footer-brand svg { color: var(--accent); }
+    .footer-links a { font-size: 13px; color: var(--text-secondary); margin-left: 20px; }
+    .footer-links a:hover { color: var(--text); }
+
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .mobile-doc-nav { display: block; }
+      .content { margin-left: 0; padding: 24px 16px 60px; }
+      footer { margin-left: 0; }
+      .nav-links { display: none; position: fixed; top: 60px; left: 0; right: 0; bottom: 0; background: var(--bg); flex-direction: column; padding: 24px; gap: 20px; }
+      .nav-links.open { display: flex; }
+      .hamburger { display: block; }
+      .page-hero { padding: 24px; }
+      .page-hero h1 { font-size: 26px; }
+      .code-wrap pre { padding: 16px; }
+      .code-wrap pre code { font-size: 13px; }
+      .endpoint { padding: 20px; }
+      .endpoint-header { gap: 8px; }
+      .endpoint-auth { margin-left: 0; }
+      .footer-inner { justify-content: center; text-align: center; }
+    }
   </style>
 </head>
 <body>
   <nav>
     <div class="nav-inner">
-      <a href="../index.html" class="nav-logo"><span>&#9889;</span> Relay</a>
+      <a href="../index.html" class="nav-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Relay
+      </a>
+      <button class="hamburger" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
       <div class="nav-links">
         <a href="getting-started.html">Docs</a>
         <a href="api-reference.html">API</a>
         <a href="sdks.html">SDKs</a>
-        <a href="https://github.com/DarkNautica/Relay">GitHub</a>
+        <a href="https://github.com/DarkNautica/Relay" class="nav-gh">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
       </div>
     </div>
   </nav>
-  <div class="layout">
-    <aside class="sidebar">
-      <h4>Getting Started</h4>
+
+  <div class="mobile-doc-nav">
+    <button class="mobile-doc-btn" onclick="this.nextElementSibling.classList.toggle('open')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      Documentation
+    </button>
+    <div class="mobile-doc-dropdown">
       <a href="getting-started.html">Quick Start</a>
       <a href="configuration.html">Configuration</a>
-      <h4>Reference</h4>
       <a href="api-reference.html" class="active">HTTP API</a>
       <a href="sdks.html">SDKs</a>
-    </aside>
-    <main class="content">
-      <h1>HTTP API Reference</h1>
-      <p>All API endpoints are prefixed with <code>/apps/{appId}</code>. Authenticated endpoints require <code>Authorization: Bearer {appSecret}</code>.</p>
+    </div>
+  </div>
 
-      <h2 id="publishing">Publishing</h2>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-title">Documentation</div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Getting Started</div>
+        <a href="getting-started.html">Quick Start</a>
+        <a href="configuration.html">Configuration</a>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-group-label">Reference</div>
+        <a href="api-reference.html" class="active">HTTP API</a>
+        <a href="sdks.html">SDKs</a>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="page-hero">
+        <h1>HTTP API Reference</h1>
+        <p>All endpoints prefixed with <code style="background:rgba(99,102,241,0.1);border-color:rgba(99,102,241,0.2)">/apps/{appId}</code>. Authenticated endpoints require Bearer token.</p>
+      </div>
+
+      <!-- Auth callout -->
+      <div class="auth-callout">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        <div class="auth-callout-body">
+          <p>Most endpoints require authentication via the <code>Authorization</code> header:</p>
+          <div class="code-wrap" style="margin-bottom:10px">
+            <pre style="padding:12px 16px"><code><span class="v">Authorization</span>: <span class="s">Bearer {appSecret}</span></code></pre>
+          </div>
+          <p>The auth endpoint (<code>/apps/{appId}/auth</code>) does not require Bearer authentication.</p>
+        </div>
+      </div>
+
+      <!-- ─── Publishing ─── -->
+      <h2 id="publishing">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        Publishing
+      </h2>
 
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method method-post">POST</span>
           <span class="endpoint-path">/apps/{appId}/events</span>
-          <span class="endpoint-auth">Requires auth</span>
+          <span class="endpoint-auth">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            Requires auth
+          </span>
         </div>
-        <p>Publish an event to a single channel.</p>
-        <h4 style="font-size:13px; margin-bottom:8px; color:var(--text);">Request Body</h4>
+        <p>Publish an event to a single channel. The <code>data</code> field must be a JSON-encoded string.</p>
+
+        <span class="endpoint-label">Request Body</span>
         <table>
           <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
           <tbody>
@@ -104,112 +239,188 @@
             <tr><td><code>socket_id</code></td><td>string</td><td>No</td><td>Exclude this socket from receiving the event</td></tr>
           </tbody>
         </table>
-        <h4 style="font-size:13px; margin-bottom:8px; color:var(--text);">Response</h4>
-        <pre><code class="language-json">{ "ok": true }</code></pre>
-        <h4 style="font-size:13px; margin-bottom:8px; color:var(--text);">Example</h4>
-        <pre><code class="language-bash">curl -X POST http://localhost:6001/apps/my-app/events \
-  -H "Authorization: Bearer my-secret" \
-  -H "Content-Type: application/json" \
-  -d '{"channel":"chat","event":"message","data":"{\"text\":\"Hello\"}"}'</code></pre>
+
+        <span class="endpoint-label">Response</span>
+        <div class="code-wrap">
+          <span class="code-lang">json</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code>{ <span class="s">"ok"</span>: <span class="k">true</span> }</code></pre>
+        </div>
+
+        <span class="endpoint-label">Example</span>
+        <div class="code-wrap">
+          <span class="code-lang">bash</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code><span class="v">curl</span> <span class="k">-X</span> POST http://localhost:6001/apps/my-app/events \
+  <span class="k">-H</span> <span class="s">"Authorization: Bearer my-secret"</span> \
+  <span class="k">-H</span> <span class="s">"Content-Type: application/json"</span> \
+  <span class="k">-d</span> <span class="s">'{"channel":"chat","event":"message","data":"{\"text\":\"Hello\"}"}'</span></code></pre>
+        </div>
       </div>
 
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method method-post">POST</span>
           <span class="endpoint-path">/apps/{appId}/events/batch</span>
-          <span class="endpoint-auth">Requires auth</span>
+          <span class="endpoint-auth">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            Requires auth
+          </span>
         </div>
-        <p>Publish multiple events in a single request.</p>
-        <h4 style="font-size:13px; margin-bottom:8px; color:var(--text);">Request Body</h4>
-        <pre><code class="language-json">{
-  "batch": [
-    { "channel": "chat", "event": "message", "data": "{\"text\":\"Hello\"}" },
-    { "channel": "alerts", "event": "notify", "data": "{\"level\":\"info\"}" }
+        <p>Publish multiple events in a single request. Each item in the <code>batch</code> array follows the same schema as the single event endpoint.</p>
+
+        <span class="endpoint-label">Request Body</span>
+        <div class="code-wrap">
+          <span class="code-lang">json</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code>{
+  <span class="s">"batch"</span>: [
+    { <span class="s">"channel"</span>: <span class="s">"chat"</span>, <span class="s">"event"</span>: <span class="s">"message"</span>, <span class="s">"data"</span>: <span class="s">"{\"text\":\"Hello\"}"</span> },
+    { <span class="s">"channel"</span>: <span class="s">"alerts"</span>, <span class="s">"event"</span>: <span class="s">"notify"</span>, <span class="s">"data"</span>: <span class="s">"{\"level\":\"info\"}"</span> }
   ]
 }</code></pre>
-        <h4 style="font-size:13px; margin-bottom:8px; color:var(--text);">Response</h4>
-        <pre><code class="language-json">{ "ok": true, "count": 2 }</code></pre>
-        <h4 style="font-size:13px; margin-bottom:8px; color:var(--text);">Example</h4>
-        <pre><code class="language-bash">curl -X POST http://localhost:6001/apps/my-app/events/batch \
-  -H "Authorization: Bearer my-secret" \
-  -H "Content-Type: application/json" \
-  -d '{"batch":[{"channel":"chat","event":"msg","data":"{}"}]}'</code></pre>
+        </div>
+
+        <span class="endpoint-label">Response</span>
+        <div class="code-wrap">
+          <span class="code-lang">json</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code>{ <span class="s">"ok"</span>: <span class="k">true</span>, <span class="s">"count"</span>: <span class="v">2</span> }</code></pre>
+        </div>
+
+        <span class="endpoint-label">Example</span>
+        <div class="code-wrap">
+          <span class="code-lang">bash</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code><span class="v">curl</span> <span class="k">-X</span> POST http://localhost:6001/apps/my-app/events/batch \
+  <span class="k">-H</span> <span class="s">"Authorization: Bearer my-secret"</span> \
+  <span class="k">-H</span> <span class="s">"Content-Type: application/json"</span> \
+  <span class="k">-d</span> <span class="s">'{"batch":[{"channel":"chat","event":"msg","data":"{}"},{"channel":"alerts","event":"ping","data":"{}"}]}'</span></code></pre>
+        </div>
       </div>
 
-      <h2 id="channels">Channels</h2>
+      <!-- ─── Channels ─── -->
+      <h2 id="channels">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Channels
+      </h2>
 
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method method-get">GET</span>
           <span class="endpoint-path">/apps/{appId}/channels</span>
-          <span class="endpoint-auth">Requires auth</span>
+          <span class="endpoint-auth">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            Requires auth
+          </span>
         </div>
-        <p>List all active channels for the app.</p>
-        <h4 style="font-size:13px; margin-bottom:8px; color:var(--text);">Response</h4>
-        <pre><code class="language-json">{
-  "channels": [
+        <p>List all active channels for the application.</p>
+
+        <span class="endpoint-label">Response</span>
+        <div class="code-wrap">
+          <span class="code-lang">json</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code>{
+  <span class="s">"channels"</span>: [
     {
-      "name": "chat",
-      "type": "public",
-      "subscriber_count": 5,
-      "occupied": true,
-      "app_id": "my-app"
+      <span class="s">"name"</span>: <span class="s">"chat"</span>,
+      <span class="s">"type"</span>: <span class="s">"public"</span>,
+      <span class="s">"subscriber_count"</span>: <span class="v">5</span>,
+      <span class="s">"occupied"</span>: <span class="k">true</span>,
+      <span class="s">"app_id"</span>: <span class="s">"my-app"</span>
     }
   ]
 }</code></pre>
-        <h4 style="font-size:13px; margin-bottom:8px; color:var(--text);">Example</h4>
-        <pre><code class="language-bash">curl http://localhost:6001/apps/my-app/channels \
-  -H "Authorization: Bearer my-secret"</code></pre>
+        </div>
+
+        <span class="endpoint-label">Example</span>
+        <div class="code-wrap">
+          <span class="code-lang">bash</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code><span class="v">curl</span> http://localhost:6001/apps/my-app/channels \
+  <span class="k">-H</span> <span class="s">"Authorization: Bearer my-secret"</span></code></pre>
+        </div>
       </div>
 
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method method-get">GET</span>
           <span class="endpoint-path">/apps/{appId}/channels/{channelName}</span>
-          <span class="endpoint-auth">Requires auth</span>
+          <span class="endpoint-auth">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            Requires auth
+          </span>
         </div>
-        <p>Get info for a single channel.</p>
-        <h4 style="font-size:13px; margin-bottom:8px; color:var(--text);">Response</h4>
-        <pre><code class="language-json">{
-  "name": "chat",
-  "type": "public",
-  "subscriber_count": 5,
-  "occupied": true,
-  "app_id": "my-app"
+        <p>Get detailed information for a single channel.</p>
+
+        <span class="endpoint-label">Response</span>
+        <div class="code-wrap">
+          <span class="code-lang">json</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code>{
+  <span class="s">"name"</span>: <span class="s">"chat"</span>,
+  <span class="s">"type"</span>: <span class="s">"public"</span>,
+  <span class="s">"subscriber_count"</span>: <span class="v">5</span>,
+  <span class="s">"occupied"</span>: <span class="k">true</span>,
+  <span class="s">"app_id"</span>: <span class="s">"my-app"</span>
 }</code></pre>
-        <h4 style="font-size:13px; margin-bottom:8px; color:var(--text);">Example</h4>
-        <pre><code class="language-bash">curl http://localhost:6001/apps/my-app/channels/chat \
-  -H "Authorization: Bearer my-secret"</code></pre>
+        </div>
+
+        <span class="endpoint-label">Example</span>
+        <div class="code-wrap">
+          <span class="code-lang">bash</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code><span class="v">curl</span> http://localhost:6001/apps/my-app/channels/chat \
+  <span class="k">-H</span> <span class="s">"Authorization: Bearer my-secret"</span></code></pre>
+        </div>
       </div>
 
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method method-get">GET</span>
           <span class="endpoint-path">/apps/{appId}/channels/{channelName}/users</span>
-          <span class="endpoint-auth">Requires auth</span>
+          <span class="endpoint-auth">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            Requires auth
+          </span>
         </div>
-        <p>Get the members of a presence channel.</p>
-        <h4 style="font-size:13px; margin-bottom:8px; color:var(--text);">Response</h4>
-        <pre><code class="language-json">{
-  "users": [
-    { "id": 1, "user_info": { "name": "Alice" } },
-    { "id": 2, "user_info": { "name": "Bob" } }
+        <p>Get the list of members in a presence channel. Only works for channels prefixed with <code>presence-</code>.</p>
+
+        <span class="endpoint-label">Response</span>
+        <div class="code-wrap">
+          <span class="code-lang">json</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code>{
+  <span class="s">"users"</span>: [
+    { <span class="s">"id"</span>: <span class="v">1</span>, <span class="s">"user_info"</span>: { <span class="s">"name"</span>: <span class="s">"Alice"</span> } },
+    { <span class="s">"id"</span>: <span class="v">2</span>, <span class="s">"user_info"</span>: { <span class="s">"name"</span>: <span class="s">"Bob"</span> } }
   ]
 }</code></pre>
-        <h4 style="font-size:13px; margin-bottom:8px; color:var(--text);">Example</h4>
-        <pre><code class="language-bash">curl http://localhost:6001/apps/my-app/channels/presence-room/users \
-  -H "Authorization: Bearer my-secret"</code></pre>
+        </div>
+
+        <span class="endpoint-label">Example</span>
+        <div class="code-wrap">
+          <span class="code-lang">bash</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code><span class="v">curl</span> http://localhost:6001/apps/my-app/channels/presence-room/users \
+  <span class="k">-H</span> <span class="s">"Authorization: Bearer my-secret"</span></code></pre>
+        </div>
       </div>
 
-      <h2 id="auth">Authentication</h2>
+      <!-- ─── Authentication ─── -->
+      <h2 id="auth">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        Authentication
+      </h2>
 
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method method-post">POST</span>
           <span class="endpoint-path">/apps/{appId}/auth</span>
         </div>
-        <p>Generate an auth token for a private or presence channel. This endpoint does <strong>not</strong> require Bearer authentication (it's called by the client-side SDK).</p>
-        <h4 style="font-size:13px; margin-bottom:8px; color:var(--text);">Request Body</h4>
+        <p>Generate an auth token for a private or presence channel subscription. This endpoint does <strong style="color:var(--text)">not</strong> require Bearer authentication -- it is called by the client-side SDK and validated using the app secret internally.</p>
+
+        <span class="endpoint-label">Request Body</span>
         <table>
           <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
           <tbody>
@@ -218,35 +429,71 @@
             <tr><td><code>channel_data</code></td><td>string</td><td>No</td><td>JSON user data (required for presence channels)</td></tr>
           </tbody>
         </table>
-        <h4 style="font-size:13px; margin-bottom:8px; color:var(--text);">Response</h4>
-        <pre><code class="language-json">{
-  "auth": "my-key:a1b2c3d4e5f6...",
-  "channel_data": "{\"user_id\":1,\"user_info\":{\"name\":\"Alice\"}}"
+
+        <span class="endpoint-label">Response</span>
+        <div class="code-wrap">
+          <span class="code-lang">json</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code>{
+  <span class="s">"auth"</span>: <span class="s">"my-key:a1b2c3d4e5f6..."</span>,
+  <span class="s">"channel_data"</span>: <span class="s">"{\"user_id\":1,\"user_info\":{\"name\":\"Alice\"}}"</span>
 }</code></pre>
-        <h4 style="font-size:13px; margin-bottom:8px; color:var(--text);">Example</h4>
-        <pre><code class="language-bash">curl -X POST http://localhost:6001/apps/my-app/auth \
-  -H "Content-Type: application/json" \
-  -d '{"socket_id":"123.456","channel_name":"private-user.1"}'</code></pre>
+        </div>
+
+        <span class="endpoint-label">Example</span>
+        <div class="code-wrap">
+          <span class="code-lang">bash</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code><span class="v">curl</span> <span class="k">-X</span> POST http://localhost:6001/apps/my-app/auth \
+  <span class="k">-H</span> <span class="s">"Content-Type: application/json"</span> \
+  <span class="k">-d</span> <span class="s">'{"socket_id":"123.456","channel_name":"private-user.1"}'</span></code></pre>
+        </div>
       </div>
 
-      <h2 id="other">Other Endpoints</h2>
+      <!-- ─── Other Endpoints ─── -->
+      <h2 id="other">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        Other Endpoints
+      </h2>
 
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method method-get">GET</span>
           <span class="endpoint-path">/apps/{appId}/channels/{channelName}/events</span>
-          <span class="endpoint-auth">Requires auth</span>
+          <span class="endpoint-auth">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            Requires auth
+          </span>
         </div>
-        <p>Get event history for a channel. Query param: <code>?limit=50</code> (default 50).</p>
+        <p>Get event history for a channel. Supports <code>?limit=50</code> query parameter (default 50).</p>
+
+        <span class="endpoint-label">Example</span>
+        <div class="code-wrap">
+          <span class="code-lang">bash</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code><span class="v">curl</span> http://localhost:6001/apps/my-app/channels/chat/events?limit=20 \
+  <span class="k">-H</span> <span class="s">"Authorization: Bearer my-secret"</span></code></pre>
+        </div>
       </div>
 
       <div class="endpoint">
         <div class="endpoint-header">
           <span class="method method-get">GET</span>
           <span class="endpoint-path">/apps/{appId}/events/log</span>
-          <span class="endpoint-auth">Requires auth</span>
+          <span class="endpoint-auth">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            Requires auth
+          </span>
         </div>
-        <p>Get the 20 most recent events for the app (debug log).</p>
+        <p>Get the 20 most recent events for the app. Useful for debugging during development.</p>
+
+        <span class="endpoint-label">Example</span>
+        <div class="code-wrap">
+          <span class="code-lang">bash</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code><span class="v">curl</span> http://localhost:6001/apps/my-app/events/log \
+  <span class="k">-H</span> <span class="s">"Authorization: Bearer my-secret"</span></code></pre>
+        </div>
       </div>
 
       <div class="endpoint">
@@ -254,7 +501,14 @@
           <span class="method method-get">GET</span>
           <span class="endpoint-path">/stats</span>
         </div>
-        <p>Server stats: total connections, channels, per-app counts. No auth required.</p>
+        <p>Server-level stats including total connections, channels, and per-app counts. No authentication required.</p>
+
+        <span class="endpoint-label">Example</span>
+        <div class="code-wrap">
+          <span class="code-lang">bash</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code><span class="v">curl</span> http://localhost:6001/stats</code></pre>
+        </div>
       </div>
 
       <div class="endpoint">
@@ -262,37 +516,83 @@
           <span class="method method-get">GET</span>
           <span class="endpoint-path">/health</span>
         </div>
-        <p>Health check endpoint. Returns 200 OK if the server is running.</p>
+        <p>Health check endpoint. Returns <code>200 OK</code> if the server is running. No authentication required.</p>
+
+        <span class="endpoint-label">Example</span>
+        <div class="code-wrap">
+          <span class="code-lang">bash</span>
+          <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+          <pre><code><span class="v">curl</span> http://localhost:6001/health</code></pre>
+        </div>
       </div>
 
-      <h2 id="websocket">WebSocket Protocol</h2>
-      <p>Clients connect via WebSocket at <code>ws://{host}:{port}/app/{appKey}</code>. All messages are JSON.</p>
+      <!-- ─── WebSocket Protocol ─── -->
+      <h2 id="websocket">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+        WebSocket Protocol
+      </h2>
+
+      <p>Clients connect via WebSocket. All messages are JSON-encoded.</p>
+
+      <span class="endpoint-label" style="margin-top:8px">Connection URL</span>
+      <div class="code-wrap">
+        <span class="code-lang">url</span>
+        <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+        <pre><code><span class="k">ws://</span><span class="v">{host}</span>:<span class="v">{port}</span>/app/<span class="v">{appKey}</span></code></pre>
+      </div>
 
       <h3>Server &rarr; Client Events</h3>
-      <table>
+      <table class="proto-table">
         <thead><tr><th>Event</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td><code>relay:connection_established</code></td><td>Sent on connect. Contains <code>socket_id</code>.</td></tr>
-          <tr><td><code>relay:subscription_succeeded</code></td><td>Channel subscription confirmed. Presence channels include member list.</td></tr>
-          <tr><td><code>relay:member_added</code></td><td>A member joined a presence channel.</td></tr>
-          <tr><td><code>relay:member_removed</code></td><td>A member left a presence channel.</td></tr>
-          <tr><td><code>relay:pong</code></td><td>Response to a ping.</td></tr>
-          <tr><td><code>relay:error</code></td><td>Error message with <code>code</code> and <code>message</code>.</td></tr>
+          <tr><td><code>relay:connection_established</code></td><td>Sent on connect. Contains <code>socket_id</code> and server activity timeout.</td></tr>
+          <tr><td><code>relay:subscription_succeeded</code></td><td>Channel subscription confirmed. Presence channels include the initial member list.</td></tr>
+          <tr><td><code>relay:member_added</code></td><td>A new member joined a presence channel. Payload includes member <code>id</code> and <code>info</code>.</td></tr>
+          <tr><td><code>relay:member_removed</code></td><td>A member left a presence channel. Payload includes member <code>id</code> and <code>info</code>.</td></tr>
+          <tr><td><code>relay:pong</code></td><td>Response to a <code>relay:ping</code> keep-alive message.</td></tr>
+          <tr><td><code>relay:error</code></td><td>Error message with <code>code</code> and <code>message</code> fields.</td></tr>
         </tbody>
       </table>
 
       <h3>Client &rarr; Server Events</h3>
-      <table>
+      <table class="proto-table">
         <thead><tr><th>Event</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td><code>relay:subscribe</code></td><td>Subscribe to a channel. Include <code>auth</code> for private/presence.</td></tr>
+          <tr><td><code>relay:subscribe</code></td><td>Subscribe to a channel. Include <code>auth</code> token for private/presence channels.</td></tr>
           <tr><td><code>relay:unsubscribe</code></td><td>Unsubscribe from a channel.</td></tr>
-          <tr><td><code>relay:ping</code></td><td>Keep-alive ping.</td></tr>
-          <tr><td><code>client-*</code></td><td>Client events (private/presence only). Must start with "client-".</td></tr>
+          <tr><td><code>relay:ping</code></td><td>Keep-alive ping. Server responds with <code>relay:pong</code>.</td></tr>
+          <tr><td><code>client-*</code></td><td>Client events (private/presence channels only). Event name must start with <code>client-</code>.</td></tr>
         </tbody>
       </table>
 
     </main>
   </div>
+
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Relay &mdash; Open source real-time WebSocket server
+      </div>
+      <div class="footer-links">
+        <a href="getting-started.html">Docs</a>
+        <a href="api-reference.html">API</a>
+        <a href="sdks.html">SDKs</a>
+        <a href="https://github.com/DarkNautica/Relay">GitHub</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    function copyCode(btn) {
+      const code = btn.closest('.code-wrap').querySelector('code');
+      navigator.clipboard.writeText(code.textContent).then(() => {
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
+        setTimeout(() => {
+          btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy';
+        }, 2000);
+      });
+    }
+  </script>
 </body>
 </html>
