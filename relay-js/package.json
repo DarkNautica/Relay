@@ -1,19 +1,31 @@
 {
   "name": "@relayhq/relay-js",
-  "version": "0.1.0",
-  "description": "Official JavaScript client for the Relay real-time server",
+  "version": "1.0.0",
+  "description": "Official JavaScript/TypeScript client SDK for the Relay real-time server",
   "main": "dist/relay.js",
   "module": "dist/relay.esm.js",
-  "types": "dist/relay.d.ts",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/relay.esm.js",
+      "require": "./dist/relay.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "files": ["dist"],
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && tsc --emitDeclarationOnly",
     "dev": "vite build --watch",
     "test": "vitest",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["websocket", "realtime", "relay", "pusher"],
+  "keywords": ["websocket", "realtime", "relay", "pusher", "broadcasting"],
+  "author": "Relay HQ",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/relayhq/relay-js"
+  },
   "devDependencies": {
     "typescript": "^5.4.0",
     "vite": "^5.2.0",

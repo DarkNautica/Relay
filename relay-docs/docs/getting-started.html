@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Getting Started — Relay Docs</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script>document.addEventListener('DOMContentLoaded',()=>hljs.highlightAll())</script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --bg-card: #161922; --border: #2a2d3a;
+      --text: #e4e4e7; --text-dim: #9ca3af; --accent: #6366f1; --accent-hover: #818cf8;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+      --sidebar-w: 240px;
+    }
+    html { scroll-behavior: smooth; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.7; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-hover); }
+
+    /* Nav */
+    nav { position: fixed; top: 0; width: 100%; background: rgba(15,17,23,0.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); z-index: 100; height: 56px; display: flex; align-items: center; padding: 0 24px; }
+    .nav-inner { max-width: 1200px; margin: 0 auto; width: 100%; display: flex; align-items: center; justify-content: space-between; }
+    .nav-logo { font-size: 18px; font-weight: 700; color: var(--text); }
+    .nav-logo span { color: var(--accent); }
+    .nav-links { display: flex; gap: 24px; }
+    .nav-links a { color: var(--text-dim); font-size: 14px; font-weight: 500; }
+    .nav-links a:hover { color: var(--text); }
+
+    /* Layout */
+    .layout { display: flex; margin-top: 56px; }
+    .sidebar { position: fixed; top: 56px; left: 0; width: var(--sidebar-w); height: calc(100vh - 56px); overflow-y: auto; padding: 24px 16px; border-right: 1px solid var(--border); background: var(--bg); }
+    .sidebar h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin: 20px 0 8px; }
+    .sidebar h4:first-child { margin-top: 0; }
+    .sidebar a { display: block; padding: 5px 12px; font-size: 14px; color: var(--text-dim); border-radius: 6px; margin-bottom: 2px; }
+    .sidebar a:hover, .sidebar a.active { background: var(--bg-card); color: var(--text); }
+    .sidebar a.active { color: var(--accent); }
+
+    .content { margin-left: var(--sidebar-w); flex: 1; max-width: 800px; padding: 40px 48px 80px; }
+    .content h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
+    .content h2 { font-size: 24px; font-weight: 600; margin-top: 48px; margin-bottom: 16px; padding-top: 24px; border-top: 1px solid var(--border); }
+    .content h3 { font-size: 18px; font-weight: 600; margin-top: 32px; margin-bottom: 12px; }
+    .content p { margin-bottom: 16px; color: var(--text-dim); }
+    .content ul, .content ol { margin-bottom: 16px; padding-left: 24px; color: var(--text-dim); }
+    .content li { margin-bottom: 6px; }
+    .content code { background: var(--bg-card); padding: 2px 6px; border-radius: 4px; font-family: var(--mono); font-size: 13px; }
+    .content pre { margin-bottom: 20px; border-radius: 8px; border: 1px solid var(--border); overflow-x: auto; }
+    .content pre code { background: none; padding: 16px; display: block; font-size: 13px; line-height: 1.6; }
+
+    /* Tab switcher */
+    .tabs { display: flex; gap: 0; margin-bottom: 0; border-bottom: 1px solid var(--border); }
+    .tab { padding: 8px 20px; font-size: 14px; font-weight: 500; color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent; background: none; border-top: none; border-left: none; border-right: none; font-family: var(--font); }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .callout { background: var(--bg-card); border-left: 3px solid var(--accent); padding: 16px 20px; border-radius: 0 8px 8px 0; margin-bottom: 20px; }
+    .callout p { margin: 0; }
+
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .content { margin-left: 0; padding: 24px 16px 60px; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-logo"><span>&#9889;</span> Relay</a>
+      <div class="nav-links">
+        <a href="getting-started.html">Docs</a>
+        <a href="api-reference.html">API</a>
+        <a href="sdks.html">SDKs</a>
+        <a href="https://github.com/DarkNautica/Relay">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <h4>Getting Started</h4>
+      <a href="getting-started.html" class="active">Quick Start</a>
+      <a href="configuration.html">Configuration</a>
+      <h4>Reference</h4>
+      <a href="api-reference.html">HTTP API</a>
+      <a href="sdks.html">SDKs</a>
+    </aside>
+
+    <main class="content">
+      <h1>Getting Started</h1>
+      <p>Get Relay running and publish your first real-time event in under 5 minutes.</p>
+
+      <h2 id="prerequisites">Prerequisites</h2>
+      <ul>
+        <li>Docker (recommended) or Go 1.22+ to build from source</li>
+        <li>A backend framework: Laravel, Node.js, Rails, or Django</li>
+        <li>A browser-based frontend (for the JS client)</li>
+      </ul>
+
+      <h2 id="step-1">Step 1: Run the Server</h2>
+      <h3>Docker (recommended)</h3>
+      <pre><code class="language-bash">docker run -d -p 6001:6001 \
+  -e RELAY_APP_KEY=my-key \
+  -e RELAY_APP_SECRET=my-secret \
+  relayhq/relay:latest</code></pre>
+
+      <h3>Download the binary</h3>
+      <p>Download the latest release for your platform from the <a href="https://github.com/DarkNautica/Relay/releases">releases page</a>, then run:</p>
+      <pre><code class="language-bash">RELAY_APP_KEY=my-key RELAY_APP_SECRET=my-secret ./relay</code></pre>
+
+      <h3>Build from source</h3>
+      <pre><code class="language-bash">git clone https://github.com/DarkNautica/Relay.git
+cd Relay/relay-server
+go build -o relay ./main.go
+RELAY_APP_KEY=my-key RELAY_APP_SECRET=my-secret ./relay</code></pre>
+
+      <div class="callout">
+        <p>The server starts on port <code>6001</code> by default. The built-in dashboard is available at <code>http://localhost:6001/dashboard</code>.</p>
+      </div>
+
+      <h2 id="step-2">Step 2: Connect the JavaScript Client</h2>
+      <pre><code class="language-bash">npm install @relayhq/relay-js</code></pre>
+
+      <pre><code class="language-typescript">import Relay from '@relayhq/relay-js'
+
+const relay = new Relay('my-key', {
+  host: 'localhost',
+  port: 6001,
+  logToConsole: true,  // helpful during development
+})
+
+// Monitor connection state
+relay.connection.bind('connected', () => {
+  console.log('Connected! Socket ID:', relay.connection.socket_id)
+})
+
+// Subscribe to a channel and listen for events
+const channel = relay.subscribe('chat')
+
+channel.bind('new-message', (data) => {
+  console.log('New message:', data.text)
+})
+
+// Debug: log all events on this channel
+channel.bindAll(({ event, data }) => {
+  console.log(`Event: ${event}`, data)
+})</code></pre>
+
+      <h2 id="step-3">Step 3: Publish from Your Backend</h2>
+      <p>Choose your framework:</p>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="laravel">Laravel</button>
+        <button class="tab" data-tab="node">Node.js</button>
+        <button class="tab" data-tab="rails">Rails</button>
+        <button class="tab" data-tab="django">Django</button>
+      </div>
+
+      <div class="tab-content active" id="tab-laravel">
+        <pre><code class="language-bash">composer require relayhq/relay-php</code></pre>
+        <pre><code class="language-php">// config/broadcasting.php
+'default' => 'relay',
+'connections' => [
+    'relay' => [
+        'driver'  => 'relay',
+        'host'    => env('RELAY_HOST', '127.0.0.1'),
+        'port'    => env('RELAY_PORT', 6001),
+        'key'     => env('RELAY_APP_KEY'),
+        'secret'  => env('RELAY_APP_SECRET'),
+        'app_id'  => env('RELAY_APP_ID'),
+    ],
+],</code></pre>
+        <pre><code class="language-php">// Publish an event
+broadcast(new MessageSent($message));</code></pre>
+      </div>
+
+      <div class="tab-content" id="tab-node">
+        <pre><code class="language-bash">npm install @relayhq/relay-node</code></pre>
+        <pre><code class="language-typescript">import { RelayClient } from '@relayhq/relay-node'
+
+const relay = new RelayClient({
+  host: '127.0.0.1',
+  port: 6001,
+  appId: 'my-app',
+  key: 'my-key',
+  secret: 'my-secret',
+})
+
+await relay.publish('chat', 'new-message', { text: 'Hello!' })</code></pre>
+      </div>
+
+      <div class="tab-content" id="tab-rails">
+        <pre><code class="language-ruby"># Gemfile
+gem 'relay-ruby'</code></pre>
+        <pre><code class="language-yaml"># config/cable.yml
+production:
+  adapter: relay
+  host: 127.0.0.1
+  port: 6001
+  app_id: my-app
+  key: my-key
+  secret: my-secret</code></pre>
+        <pre><code class="language-ruby"># Publish
+ActionCable.server.broadcast('chat', { text: 'Hello!' })</code></pre>
+      </div>
+
+      <div class="tab-content" id="tab-django">
+        <pre><code class="language-bash">pip install relay-python</code></pre>
+        <pre><code class="language-python">from relay import RelayClient
+
+relay = RelayClient(
+    host='127.0.0.1',
+    port=6001,
+    app_id='my-app',
+    key='my-key',
+    secret='my-secret',
+)
+
+relay.publish('chat', 'new-message', {'text': 'Hello!'})</code></pre>
+      </div>
+
+      <h2 id="step-4">Step 4: Private Channels</h2>
+      <p>Private channels require server-side authentication. The channel name must start with <code>private-</code>.</p>
+
+      <pre><code class="language-typescript">// Client side — subscribe to a private channel
+const orders = relay.subscribe('private-orders.42')
+orders.bind('update', (data) => console.log('Order update:', data))</code></pre>
+
+      <p>The JS client will automatically POST to your auth endpoint (<code>/broadcasting/auth</code> by default). Your backend verifies the user and returns a signed token.</p>
+
+      <h2 id="step-5">Step 5: Presence Channels</h2>
+      <p>Presence channels track which users are online. The channel name must start with <code>presence-</code>.</p>
+
+      <pre><code class="language-typescript">const room = relay.subscribe('presence-room.1')
+
+// Fires when subscription succeeds with the initial member list
+room.bind('relay:subscription_succeeded', (data) => {
+  console.log('Members online:', data.presence.count)
+})
+
+// Fires when a new member joins
+room.bind('relay:member_added', (member) => {
+  console.log(`${member.info.name} joined`)
+})
+
+// Fires when a member leaves
+room.bind('relay:member_removed', (member) => {
+  console.log(`${member.info.name} left`)
+})</code></pre>
+
+      <p>Your auth endpoint must return <code>channel_data</code> containing the user's ID and info for presence channels. All server SDKs handle this automatically.</p>
+
+    </main>
+  </div>
+
+  <script>
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'))
+        tab.classList.add('active')
+        document.getElementById('tab-' + tab.dataset.tab).classList.add('active')
+      })
+    })
+  </script>
+</body>
+</html>

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Relay — The Open Source Pusher Alternative</title>
+  <meta name="description" content="Self-hosted, real-time WebSocket server. Replace Pusher and Ably with a single binary you control.">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117;
+      --bg-card: #161922;
+      --bg-hover: #1c1f2e;
+      --border: #2a2d3a;
+      --text: #e4e4e7;
+      --text-dim: #9ca3af;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --green: #22c55e;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+      --max-w: 1140px;
+    }
+    html { scroll-behavior: smooth; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.6; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-hover); }
+
+    /* ─── Nav ─── */
+    nav { position: fixed; top: 0; width: 100%; background: rgba(15,17,23,0.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); z-index: 100; }
+    .nav-inner { max-width: var(--max-w); margin: 0 auto; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 60px; }
+    .nav-logo { font-size: 20px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .nav-logo span { color: var(--accent); }
+    .nav-links { display: flex; gap: 28px; align-items: center; }
+    .nav-links a { color: var(--text-dim); font-size: 14px; font-weight: 500; }
+    .nav-links a:hover { color: var(--text); }
+
+    /* ─── Hero ─── */
+    .hero { padding: 160px 24px 100px; text-align: center; }
+    .hero h1 { font-size: clamp(36px, 5vw, 64px); font-weight: 800; line-height: 1.1; margin-bottom: 20px; }
+    .hero h1 span { background: linear-gradient(135deg, var(--accent), #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hero p { font-size: 18px; color: var(--text-dim); max-width: 600px; margin: 0 auto 36px; }
+    .hero-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 15px; transition: all 0.2s; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); color: #fff; }
+    .btn-secondary { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--bg-hover); color: var(--text); }
+
+    /* ─── Section ─── */
+    .section { max-width: var(--max-w); margin: 0 auto; padding: 80px 24px; }
+    .section-title { font-size: 32px; font-weight: 700; text-align: center; margin-bottom: 12px; }
+    .section-sub { font-size: 16px; color: var(--text-dim); text-align: center; margin-bottom: 48px; }
+
+    /* ─── Features Grid ─── */
+    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+    .feature { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 28px; transition: border-color 0.2s; }
+    .feature:hover { border-color: var(--accent); }
+    .feature-icon { font-size: 28px; margin-bottom: 12px; }
+    .feature h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    .feature p { font-size: 14px; color: var(--text-dim); }
+
+    /* ─── Steps ─── */
+    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 32px; }
+    .step { text-align: center; }
+    .step-num { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; font-size: 20px; margin-bottom: 16px; }
+    .step h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    .step p { font-size: 14px; color: var(--text-dim); }
+    .step code { background: var(--bg-card); padding: 2px 8px; border-radius: 4px; font-family: var(--mono); font-size: 13px; }
+
+    /* ─── Comparison Table ─── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { background: var(--bg-card); text-align: left; padding: 12px 16px; font-weight: 600; border-bottom: 2px solid var(--border); }
+    td { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .check { color: var(--green); font-weight: 700; }
+    .cross { color: #ef4444; }
+
+    /* ─── Frameworks ─── */
+    .frameworks { display: flex; flex-wrap: wrap; justify-content: center; gap: 40px; padding: 20px 0; }
+    .framework { display: flex; flex-direction: column; align-items: center; gap: 10px; color: var(--text-dim); font-size: 14px; font-weight: 500; }
+    .framework-icon { width: 56px; height: 56px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+
+    /* ─── Footer ─── */
+    footer { border-top: 1px solid var(--border); padding: 32px 24px; text-align: center; }
+    .footer-inner { max-width: var(--max-w); margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    .footer-inner p { color: var(--text-dim); font-size: 14px; }
+    .badge { display: inline-block; padding: 4px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--text-dim); font-weight: 500; }
+
+    @media (max-width: 640px) {
+      .nav-links { gap: 16px; }
+      .hero { padding: 120px 16px 60px; }
+      .section { padding: 48px 16px; }
+      .footer-inner { justify-content: center; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Nav -->
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="nav-logo"><span>&#9889;</span> Relay</a>
+      <div class="nav-links">
+        <a href="docs/getting-started.html">Docs</a>
+        <a href="docs/api-reference.html">API</a>
+        <a href="docs/sdks.html">SDKs</a>
+        <a href="https://github.com/DarkNautica/Relay">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1>The open source<br><span>Pusher alternative</span></h1>
+    <p>Self-hosted, real-time WebSocket server. Replace Pusher and Ably with a single binary you control. Zero vendor lock-in. Free forever.</p>
+    <div class="hero-buttons">
+      <a href="docs/getting-started.html" class="btn btn-primary">Get Started</a>
+      <a href="https://github.com/DarkNautica/Relay" class="btn btn-secondary">View on GitHub</a>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="section">
+    <h2 class="section-title">Why Relay</h2>
+    <p class="section-sub">Everything you need for real-time, nothing you don't.</p>
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">&#127968;</div>
+        <h3>Self-Hosted</h3>
+        <p>Runs on your own server, your own terms. Full control over data and infrastructure. No third-party dependencies.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">&#128268;</div>
+        <h3>Framework Agnostic</h3>
+        <p>Official SDKs for Laravel, Node.js, Rails, and Django. Works with any language that can make HTTP requests.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">&#128260;</div>
+        <h3>Pusher Compatible</h3>
+        <p>Drop-in replacement for Pusher. Existing apps switch with one config change. Same protocol, same client libraries.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">&#128230;</div>
+        <h3>Single Binary</h3>
+        <p>One file, no runtime, no JVM, no Node. Download and run. Or use Docker. Production-ready in seconds.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">&#128064;</div>
+        <h3>Open Source</h3>
+        <p>MIT licensed. Read every line of code. Contribute, fork, extend. Community-driven development.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">&#128176;</div>
+        <h3>Free Forever</h3>
+        <p>No per-message pricing. No connection limits. No surprise bills. Unlimited everything, forever.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section class="section">
+    <h2 class="section-title">How It Works</h2>
+    <p class="section-sub">Three steps to real-time. That's it.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Run the Server</h3>
+        <p>Single binary or Docker container. <code>docker run relayhq/relay</code> and you're live on port 6001.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Connect from JavaScript</h3>
+        <p>Install <code>@relayhq/relay-js</code> and subscribe to channels. Events arrive in real-time over WebSocket.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Publish from Your Backend</h3>
+        <p>Use any server SDK — Laravel, Node, Rails, or Django — to publish events via a simple HTTP call.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison -->
+  <section class="section">
+    <h2 class="section-title">Relay vs. The Rest</h2>
+    <p class="section-sub">See how Relay stacks up against paid real-time services.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Relay</th>
+            <th>Pusher</th>
+            <th>Ably</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Self-hosted</td><td class="check">Yes</td><td class="cross">No</td><td class="cross">No</td></tr>
+          <tr><td>Open source</td><td class="check">MIT</td><td class="cross">No</td><td class="cross">No</td></tr>
+          <tr><td>Free tier limits</td><td class="check">Unlimited</td><td>200k msgs/day</td><td>6M msgs/mo</td></tr>
+          <tr><td>Per-message pricing</td><td class="check">None</td><td>$0.000017/msg</td><td>$0.0000025/msg</td></tr>
+          <tr><td>Private channels</td><td class="check">Yes</td><td class="check">Yes</td><td class="check">Yes</td></tr>
+          <tr><td>Presence channels</td><td class="check">Yes</td><td class="check">Yes</td><td class="check">Yes</td></tr>
+          <tr><td>Channel history</td><td class="check">Yes</td><td>Paid add-on</td><td class="check">Yes</td></tr>
+          <tr><td>Webhooks</td><td class="check">Yes</td><td class="check">Yes</td><td class="check">Yes</td></tr>
+          <tr><td>Laravel support</td><td class="check">Yes</td><td class="check">Yes</td><td>Community</td></tr>
+          <tr><td>Rails support</td><td class="check">Yes</td><td class="check">Yes</td><td>Community</td></tr>
+          <tr><td>Django support</td><td class="check">Yes</td><td>Community</td><td>Community</td></tr>
+          <tr><td>Node.js SDK</td><td class="check">Yes</td><td class="check">Yes</td><td class="check">Yes</td></tr>
+          <tr><td>Web dashboard</td><td class="check">Built-in</td><td class="check">Yes</td><td class="check">Yes</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Frameworks -->
+  <section class="section">
+    <h2 class="section-title">Works With Your Stack</h2>
+    <p class="section-sub">Official SDKs for every major framework.</p>
+    <div class="frameworks">
+      <div class="framework"><div class="framework-icon">&#9883;</div>Laravel</div>
+      <div class="framework"><div class="framework-icon">&#9041;</div>Node.js</div>
+      <div class="framework"><div class="framework-icon">&#128169;</div>Rails</div>
+      <div class="framework"><div class="framework-icon">&#128013;</div>Django</div>
+      <div class="framework"><div class="framework-icon">&#128172;</div>JavaScript</div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-inner">
+      <p>Relay &mdash; Open source real-time WebSocket server</p>
+      <div>
+        <a href="https://github.com/DarkNautica/Relay" style="color:var(--text-dim); margin-right: 16px;">GitHub</a>
+        <span class="badge">MIT License</span>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
