@@ -1,0 +1,18 @@
+services:
+  relay:
+    image: relayhq/relay:latest
+    # Or build locally: build: .
+    ports:
+      - "${RELAY_PORT:-6001}:6001"
+    environment:
+      RELAY_APP_ID: ${RELAY_APP_ID:-my-app}
+      RELAY_APP_KEY: ${RELAY_APP_KEY:-my-key}
+      RELAY_APP_SECRET: ${RELAY_APP_SECRET:-my-secret}
+      RELAY_DEBUG: ${RELAY_DEBUG:-false}
+      RELAY_DASHBOARD_ENABLED: "true"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:6001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

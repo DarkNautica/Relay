@@ -1,0 +1,38 @@
+{
+  "name": "relayhq/relay-php",
+  "description": "Official Laravel Broadcasting driver for the Relay real-time server",
+  "keywords": ["laravel", "websocket", "realtime", "relay", "broadcasting"],
+  "license": "MIT",
+  "require": {
+    "php": "^8.1",
+    "illuminate/support": "^10.0|^11.0",
+    "illuminate/broadcasting": "^10.0|^11.0",
+    "guzzlehttp/guzzle": "^7.0"
+  },
+  "require-dev": {
+    "orchestra/testbench": "^8.0|^9.0",
+    "phpunit/phpunit": "^10.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "RelayHQ\\Relay\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "RelayHQ\\Relay\\Tests\\": "tests/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "RelayHQ\\Relay\\RelayServiceProvider"
+      ],
+      "aliases": {
+        "Relay": "RelayHQ\\Relay\\Facades\\Relay"
+      }
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}
