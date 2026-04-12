@@ -410,6 +410,57 @@ room.bind(<span class="s">'relay:member_removed'</span>, (member) =&gt; {
 })</code></pre>
       </div>
       <p>Your auth endpoint must return <code>channel_data</code> containing the user's ID and info for presence channels. All server SDKs handle this automatically.</p>
+
+      <h2>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--amber)"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Common Issues
+      </h2>
+
+      <h3>1. BROADCAST_CONNECTION vs BROADCAST_DRIVER</h3>
+      <p><strong style="color:var(--text)">Laravel 11+</strong> renamed the environment variable from <code>BROADCAST_DRIVER</code> to <code>BROADCAST_CONNECTION</code>. Make sure you set the correct one in your <code>.env</code>:</p>
+      <div class="code-wrap">
+        <span class="code-lang">env</span>
+        <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+        <pre><code><span class="c"># Laravel 11+</span>
+<span class="v">BROADCAST_CONNECTION</span>=<span class="s">relay</span>
+
+<span class="c"># Laravel 10 and below</span>
+<span class="v">BROADCAST_DRIVER</span>=<span class="s">relay</span></code></pre>
+      </div>
+
+      <h3>2. CSRF Exemption for /broadcasting/auth</h3>
+      <p>The <code>/broadcasting/auth</code> endpoint <strong style="color:var(--text)">must</strong> be excluded from CSRF verification. Without this, private and presence channel authentication will fail with a <code>419</code> status code.</p>
+
+      <p><strong style="color:var(--text)">Laravel 11+</strong> &mdash; in <code>bootstrap/app.php</code>:</p>
+      <div class="code-wrap">
+        <span class="code-lang">php</span>
+        <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+        <pre><code>-&gt;withMiddleware(<span class="k">function</span> (Middleware <span class="v">$middleware</span>) {
+    <span class="v">$middleware</span>-&gt;validateCsrfTokens(except: [
+        <span class="s">'broadcasting/auth'</span>,
+    ]);
+})</code></pre>
+      </div>
+
+      <p><strong style="color:var(--text)">Laravel 10 and below</strong> &mdash; in <code>app/Http/Middleware/VerifyCsrfToken.php</code>:</p>
+      <div class="code-wrap">
+        <span class="code-lang">php</span>
+        <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+        <pre><code><span class="k">protected</span> <span class="v">$except</span> = [
+    <span class="s">'broadcasting/auth'</span>,
+];</code></pre>
+      </div>
+
+      <h3>3. Event Name Prefixes</h3>
+      <p>The Relay JS client uses <code>relay:</code> prefixed internal events (e.g. <code>relay:subscription_succeeded</code>, <code>relay:member_added</code>). If you are migrating from Pusher, note that the client automatically handles both <code>relay:</code> and <code>pusher:</code> prefixed events, so no changes are needed in your event listeners.</p>
+      <p>When binding to channel events in your frontend code, use the <code>relay:</code> prefix:</p>
+      <div class="code-wrap">
+        <span class="code-lang">js</span>
+        <button class="code-copy" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button>
+        <pre><code>channel.bind(<span class="s">'relay:subscription_succeeded'</span>, (data) =&gt; { <span class="c">/* ... */</span> })
+channel.bind(<span class="s">'relay:member_added'</span>, (member) =&gt; { <span class="c">/* ... */</span> })
+channel.bind(<span class="s">'relay:member_removed'</span>, (member) =&gt; { <span class="c">/* ... */</span> })</code></pre>
+      </div>
     </main>
   </div>
 

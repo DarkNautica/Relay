@@ -437,7 +437,13 @@ export class Relay {
 
     const data = msg.data ? this.parseData(msg.data) : undefined
 
-    switch (msg.event) {
+    // Normalize pusher: prefixed events to relay: equivalents so the
+    // client works against servers that send either prefix.
+    const event = msg.event
+      .replace(/^pusher_internal:/, 'relay:')
+      .replace(/^pusher:/, 'relay:')
+
+    switch (event) {
       case 'relay:connection_established':
         this.socketId = data?.socket_id ?? null
         this.setState('connected')

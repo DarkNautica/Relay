@@ -1,8 +1,10 @@
 [
   {
-    "id": "app-1",
-    "key": "key-1",
-    "secret": "secret-1",
-    "max_connections": 1000
+    "id": "relay-app",
+    "key": "relay-key",
+    "secret": "relay-secret-change-me",
+    "max_connections": 1000,
+    "history": true,
+    "history_limit": 100
   }
 ]
