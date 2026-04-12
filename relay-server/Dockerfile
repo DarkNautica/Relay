@@ -27,9 +27,6 @@ WORKDIR /relay
 # Copy the compiled binary
 COPY --from=builder /app/relay .
 
-# Generate a placeholder env file (user should mount their own .env)
-RUN echo "# Default env - copy to .env and configure" > .env.example
-
 # Relay runs on port 6001 by default
 EXPOSE 6001
 
