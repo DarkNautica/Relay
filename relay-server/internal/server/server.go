@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/relayhq/relay-server/internal/api"
 	"github.com/relayhq/relay-server/internal/config"
+	"github.com/relayhq/relay-server/internal/dashboard"
 	"github.com/relayhq/relay-server/internal/hub"
 	wshandler "github.com/relayhq/relay-server/internal/websocket"
 )
@@ -66,6 +67,12 @@ func (s *Server) buildRouter() http.Handler {
 	appsRouter.HandleFunc("/channels/{channelName}", auth(apiHandler.GetChannel)).Methods(http.MethodGet)
 	appsRouter.HandleFunc("/channels/{channelName}/users", auth(apiHandler.GetChannelUsers)).Methods(http.MethodGet)
 
+	// Auth endpoint — no Bearer auth (the user's app authenticates this)
+	appsRouter.HandleFunc("/auth", apiHandler.AuthChannel).Methods(http.MethodPost)
+
+	// Event log for dashboard
+	appsRouter.HandleFunc("/events/log", auth(apiHandler.GetEventLog)).Methods(http.MethodGet)
+
 	// Stats endpoint (no auth — useful for health checks)
 	r.HandleFunc("/stats", apiHandler.GetStats).Methods(http.MethodGet)
 
@@ -74,6 +81,12 @@ func (s *Server) buildRouter() http.Handler {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
 	}).Methods(http.MethodGet)
+
+	// Dashboard
+	if s.cfg.DashboardEnabled {
+		dash := dashboard.NewHandler()
+		r.Handle(s.cfg.DashboardPath, dash).Methods(http.MethodGet)
+	}
 
 	// CORS middleware
 	return corsMiddleware(r)

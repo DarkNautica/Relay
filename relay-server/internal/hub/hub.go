@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 
+	"github.com/relayhq/relay-server/internal/auth"
 	"github.com/relayhq/relay-server/internal/config"
 	"github.com/relayhq/relay-server/internal/protocol"
 )
@@ -37,6 +39,18 @@ type Hub struct {
 
 	// Publish from HTTP API
 	Publish chan *protocol.PublishRequest
+
+	// Event log ring buffer
+	eventLog    [100]EventLogEntry
+	eventLogPos int
+	eventLogLen int
+}
+
+// EventLogEntry records a published event for the dashboard.
+type EventLogEntry struct {
+	Timestamp string `json:"timestamp"`
+	Channel   string `json:"channel"`
+	Event     string `json:"event"`
 }
 
 // NewHub creates a Hub ready to be started with Run().
@@ -184,7 +198,11 @@ func (h *Hub) handleSubscribe(client *Client, msg *protocol.Message) {
 
 	// Validate auth for private and presence channels
 	if channelType == protocol.ChannelTypePrivate || channelType == protocol.ChannelTypePresence {
-		if !h.validateAuth(client.SocketID, channelName, subData.Auth) {
+		channelData := ""
+		if channelType == protocol.ChannelTypePresence {
+			channelData = subData.ChannelData
+		}
+		if !h.validateAuth(client.SocketID, channelName, subData.Auth, channelData) {
 			h.sendError(client, 4009, "Invalid authentication signature")
 			return
 		}
@@ -311,6 +329,19 @@ func (h *Hub) handlePublish(req *protocol.PublishRequest) {
 
 	ch.Broadcast(msg, req.SocketID)
 
+	// Record to event log ring buffer
+	h.mu.Lock()
+	h.eventLog[h.eventLogPos] = EventLogEntry{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Channel:   req.Channel,
+		Event:     req.Event,
+	}
+	h.eventLogPos = (h.eventLogPos + 1) % len(h.eventLog)
+	if h.eventLogLen < len(h.eventLog) {
+		h.eventLogLen++
+	}
+	h.mu.Unlock()
+
 	if h.cfg.Debug {
 		log.Printf("[Relay] Published event=%s channel=%s", req.Event, req.Channel)
 	}
@@ -336,12 +367,8 @@ func (h *Hub) broadcastMemberRemoved(ch *Channel, member *protocol.PresenceMembe
 
 // --- Auth Validation ---
 
-func (h *Hub) validateAuth(socketID, channelName, authToken string) bool {
-	// Auth format: "app-key:hmac-signature"
-	// The signature is HMAC-SHA256 of "{socketId}:{channelName}" using the app secret
-	// This is validated in the auth package — stub here returns true for now
-	// TODO: wire up auth.Validate(h.cfg, socketID, channelName, authToken)
-	return authToken != ""
+func (h *Hub) validateAuth(socketID, channelName, authToken, channelData string) bool {
+	return auth.Validate(h.cfg.AppKey, h.cfg.AppSecret, socketID, channelName, authToken, channelData)
 }
 
 // --- Error Handling ---
@@ -408,6 +435,22 @@ func (h *Hub) ChannelCount() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return len(h.channels)
+}
+
+// GetEventLog returns the last n events from the ring buffer in reverse chronological order.
+func (h *Hub) GetEventLog(n int) []EventLogEntry {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	if n > h.eventLogLen {
+		n = h.eventLogLen
+	}
+	result := make([]EventLogEntry, n)
+	for i := 0; i < n; i++ {
+		idx := (h.eventLogPos - 1 - i + len(h.eventLog)) % len(h.eventLog)
+		result[i] = h.eventLog[idx]
+	}
+	return result
 }
 
 // RegisterClient is called by the WebSocket handler to register a new connection.

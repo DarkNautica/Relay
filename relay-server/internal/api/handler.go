@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	"github.com/relayhq/relay-server/internal/auth"
 	"github.com/relayhq/relay-server/internal/config"
 	"github.com/relayhq/relay-server/internal/hub"
 	"github.com/relayhq/relay-server/internal/protocol"
@@ -102,6 +103,41 @@ func (h *Handler) GetChannelUsers(w http.ResponseWriter, r *http.Request) {
 		users = append(users, m)
 	}
 	jsonOK(w, map[string]any{"users": users})
+}
+
+// AuthChannel handles POST /apps/{appId}/auth
+// This endpoint is called by the client SDK (e.g. relay-js) when subscribing
+// to private or presence channels. It does NOT require Bearer auth — the user's
+// own application is responsible for authenticating the request before calling this.
+func (h *Handler) AuthChannel(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		SocketID    string `json:"socket_id"`
+		ChannelName string `json:"channel_name"`
+		ChannelData string `json:"channel_data,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "Invalid JSON body")
+		return
+	}
+
+	if req.SocketID == "" || req.ChannelName == "" {
+		jsonError(w, http.StatusUnprocessableEntity, "socket_id and channel_name are required")
+		return
+	}
+
+	token := auth.Sign(h.cfg.AppKey, h.cfg.AppSecret, req.SocketID, req.ChannelName, req.ChannelData)
+
+	resp := map[string]string{"auth": token}
+	if req.ChannelData != "" {
+		resp["channel_data"] = req.ChannelData
+	}
+	jsonOK(w, resp)
+}
+
+// GetEventLog handles GET /apps/{appId}/events/log
+func (h *Handler) GetEventLog(w http.ResponseWriter, r *http.Request) {
+	events := h.hub.GetEventLog(20)
+	jsonOK(w, map[string]any{"events": events})
 }
 
 // GetStats handles GET /stats
