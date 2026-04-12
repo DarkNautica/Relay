@@ -52,11 +52,11 @@
 
     /* Tab switcher */
     .tabs { display: flex; gap: 0; margin-bottom: 0; border-bottom: 1px solid var(--border); }
-    .tab { padding: 8px 20px; font-size: 14px; font-weight: 500; color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent; background: none; border-top: none; border-left: none; border-right: none; font-family: var(--font); }
+    .tab { padding: 8px 20px; font-size: 14px; font-weight: 500; color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent; background: none; border-top: none; border-left: none; border-right: none; font-family: var(--font); transition: color 0.15s; }
     .tab:hover { color: var(--text); }
     .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
+    .tab-content { display: none !important; margin-top: 4px; }
+    .tab-content.active { display: block !important; }
 
     .callout { background: var(--bg-card); border-left: 3px solid var(--accent); padding: 16px 20px; border-radius: 0 8px 8px 0; margin-bottom: 20px; }
     .callout p { margin: 0; }
@@ -260,10 +260,15 @@ room.bind('relay:member_removed', (member) => {
   <script>
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
+        // Deactivate all tabs and panels
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'))
+        // Activate clicked tab and its panel
         tab.classList.add('active')
-        document.getElementById('tab-' + tab.dataset.tab).classList.add('active')
+        const panel = document.getElementById('tab-' + tab.dataset.tab)
+        panel.classList.add('active')
+        // Re-highlight code blocks that were hidden when highlight.js first ran
+        panel.querySelectorAll('pre code:not(.hljs)').forEach(block => hljs.highlightElement(block))
       })
     })
   </script>
