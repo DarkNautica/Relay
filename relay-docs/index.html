@@ -3,159 +3,296 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Relay — The Open Source Pusher Alternative</title>
-  <meta name="description" content="Self-hosted, real-time WebSocket server. Replace Pusher and Ably with a single binary you control.">
+  <title>Relay — Self-Hosted Real-Time WebSocket Server</title>
+  <meta name="description" content="Replace Pusher and Ably with a single binary you control. Open source, self-hosted, Pusher-compatible WebSocket server.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #0f1117;
-      --bg-card: #161922;
-      --bg-hover: #1c1f2e;
-      --border: #2a2d3a;
-      --text: #e4e4e7;
-      --text-dim: #9ca3af;
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --border: #1e1e2e;
       --accent: #6366f1;
       --accent-hover: #818cf8;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --text: #f8fafc;
+      --text-secondary: #94a3b8;
       --green: #22c55e;
-      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      --mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
-      --max-w: 1140px;
+      --red: #ef4444;
+      --amber: #f59e0b;
+      --code-bg: #0d1117;
+      --max-w: 1180px;
+      --font: 'Inter', system-ui, -apple-system, sans-serif;
+      --mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
     }
     html { scroll-behavior: smooth; }
-    body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.6; }
-    a { color: var(--accent); text-decoration: none; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    a { color: var(--accent); text-decoration: none; transition: color 0.15s; }
     a:hover { color: var(--accent-hover); }
 
-    /* ─── Nav ─── */
-    nav { position: fixed; top: 0; width: 100%; background: rgba(15,17,23,0.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); z-index: 100; }
+    /* ─── Navigation ─── */
+    nav { position: fixed; top: 0; width: 100%; background: rgba(10,10,15,0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); z-index: 100; }
     .nav-inner { max-width: var(--max-w); margin: 0 auto; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 60px; }
-    .nav-logo { font-size: 20px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
-    .nav-logo span { color: var(--accent); }
-    .nav-links { display: flex; gap: 28px; align-items: center; }
-    .nav-links a { color: var(--text-dim); font-size: 14px; font-weight: 500; }
+    .nav-logo { font-size: 18px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; letter-spacing: -0.02em; }
+    .nav-logo svg { color: var(--accent); }
+    .nav-links { display: flex; gap: 32px; align-items: center; }
+    .nav-links a { color: var(--text-secondary); font-size: 14px; font-weight: 500; }
     .nav-links a:hover { color: var(--text); }
+    .nav-gh { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--text-secondary) !important; transition: border-color 0.15s, color 0.15s; }
+    .nav-gh:hover { border-color: #3a3a4a; color: var(--text) !important; }
+    .nav-gh svg { width: 16px; height: 16px; }
+    .hamburger { display: none; background: none; border: none; color: var(--text); cursor: pointer; padding: 4px; }
 
     /* ─── Hero ─── */
-    .hero { padding: 160px 24px 100px; text-align: center; }
-    .hero h1 { font-size: clamp(36px, 5vw, 64px); font-weight: 800; line-height: 1.1; margin-bottom: 20px; }
-    .hero h1 span { background: linear-gradient(135deg, var(--accent), #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-    .hero p { font-size: 18px; color: var(--text-dim); max-width: 600px; margin: 0 auto 36px; }
-    .hero-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
-    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 15px; transition: all 0.2s; }
+    .hero { position: relative; min-height: 100vh; display: flex; align-items: center; padding: 100px 24px 80px; overflow: hidden; }
+    .hero-glow { position: absolute; top: -200px; right: -100px; width: 700px; height: 700px; background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%); pointer-events: none; }
+    .hero-inner { max-width: var(--max-w); margin: 0 auto; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; position: relative; z-index: 1; }
+    .hero-text { max-width: 540px; }
+    .hero-badge { display: inline-flex; align-items: center; gap: 8px; padding: 5px 14px; background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.2); border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--green); margin-bottom: 24px; }
+    .hero-badge-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+    .hero h1 { font-size: 52px; font-weight: 800; line-height: 1.08; letter-spacing: -0.035em; margin-bottom: 20px; color: var(--text); }
+    .hero-sub { font-size: 17px; line-height: 1.7; color: var(--text-secondary); margin-bottom: 32px; }
+    .hero-buttons { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 24px; border-radius: 8px; font-weight: 600; font-size: 14px; transition: all 0.2s; border: none; cursor: pointer; font-family: var(--font); }
     .btn-primary { background: var(--accent); color: #fff; }
-    .btn-primary:hover { background: var(--accent-hover); color: #fff; }
-    .btn-secondary { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
-    .btn-secondary:hover { background: var(--bg-hover); color: var(--text); }
+    .btn-primary:hover { background: var(--accent-hover); color: #fff; box-shadow: 0 0 24px var(--accent-glow); }
+    .btn-outline { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+    .btn-outline:hover { border-color: #3a3a4a; color: var(--text); }
+    .btn-outline svg { width: 16px; height: 16px; }
+    .hero-stats { font-size: 13px; color: var(--text-secondary); display: flex; gap: 8px; flex-wrap: wrap; }
+    .hero-stats span { opacity: 0.5; }
 
-    /* ─── Section ─── */
-    .section { max-width: var(--max-w); margin: 0 auto; padding: 80px 24px; }
-    .section-title { font-size: 32px; font-weight: 700; text-align: center; margin-bottom: 12px; }
-    .section-sub { font-size: 16px; color: var(--text-dim); text-align: center; margin-bottom: 48px; }
+    /* Terminal */
+    .terminal { background: var(--code-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 0 60px var(--accent-glow), 0 24px 48px rgba(0,0,0,0.4); }
+    .terminal-header { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border); }
+    .terminal-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .terminal-dot.red { background: #ff5f57; }
+    .terminal-dot.yellow { background: #febc2e; }
+    .terminal-dot.green { background: #28c840; }
+    .terminal-title { font-size: 12px; color: var(--text-secondary); margin-left: 8px; font-family: var(--mono); }
+    .terminal-body { padding: 20px; font-family: var(--mono); font-size: 13px; line-height: 1.8; }
+    .terminal-body .prompt { color: var(--text-secondary); }
+    .terminal-body .cmd { color: var(--text); }
+    .terminal-body .flag { color: var(--accent); }
+    .terminal-body .str { color: var(--green); }
+    .terminal-body .ok { color: var(--green); }
+    .terminal-body .dim { color: var(--text-secondary); }
 
-    /* ─── Features Grid ─── */
-    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-    .feature { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 28px; transition: border-color 0.2s; }
-    .feature:hover { border-color: var(--accent); }
-    .feature-icon { font-size: 28px; margin-bottom: 12px; }
-    .feature h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
-    .feature p { font-size: 14px; color: var(--text-dim); }
+    /* ─── Sections ─── */
+    .section { max-width: var(--max-w); margin: 0 auto; padding: 100px 24px; }
+    .section-label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); text-align: center; margin-bottom: 12px; }
+    .section-title { font-size: 36px; font-weight: 700; text-align: center; margin-bottom: 14px; letter-spacing: -0.03em; }
+    .section-sub { font-size: 16px; color: var(--text-secondary); text-align: center; margin-bottom: 56px; max-width: 540px; margin-left: auto; margin-right: auto; }
 
-    /* ─── Steps ─── */
-    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 32px; }
-    .step { text-align: center; }
-    .step-num { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; font-size: 20px; margin-bottom: 16px; }
-    .step h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
-    .step p { font-size: 14px; color: var(--text-dim); }
-    .step code { background: var(--bg-card); padding: 2px 8px; border-radius: 4px; font-family: var(--mono); font-size: 13px; }
+    /* ─── Feature Grid ─── */
+    .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .feature { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; transition: border-color 0.2s, box-shadow 0.2s; }
+    .feature:hover { border-color: rgba(99,102,241,0.4); box-shadow: 0 0 24px var(--accent-glow); }
+    .feature-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: var(--accent-glow); border-radius: 10px; margin-bottom: 16px; }
+    .feature-icon svg { width: 20px; height: 20px; color: var(--accent); }
+    .feature h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.01em; }
+    .feature p { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
 
-    /* ─── Comparison Table ─── */
-    .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; }
-    th { background: var(--bg-card); text-align: left; padding: 12px 16px; font-weight: 600; border-bottom: 2px solid var(--border); }
-    td { padding: 12px 16px; border-bottom: 1px solid var(--border); }
-    .check { color: var(--green); font-weight: 700; }
-    .cross { color: #ef4444; }
+    /* ─── How It Works ─── */
+    .steps { position: relative; display: flex; flex-direction: column; gap: 0; }
+    .steps-line { position: absolute; left: 23px; top: 48px; bottom: 48px; width: 1px; background: var(--border); }
+    .step { display: grid; grid-template-columns: 48px 1fr; gap: 24px; padding: 24px 0; }
+    .step-num { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); color: var(--accent); font-weight: 700; font-size: 16px; position: relative; z-index: 1; }
+    .step-content h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.01em; }
+    .step-content p { font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; }
+    .code-block { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; font-family: var(--mono); font-size: 13px; line-height: 1.7; overflow-x: auto; }
+    .code-block .kw { color: #c678dd; }
+    .code-block .fn { color: #61afef; }
+    .code-block .str { color: #98c379; }
+    .code-block .cm { color: #5c6370; font-style: italic; }
+    .code-block .op { color: var(--text-secondary); }
+    .code-block .num { color: #d19a66; }
+
+    /* Step tabs */
+    .step-tabs { display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+    .step-tab { padding: 6px 16px; font-size: 13px; font-weight: 500; color: var(--text-secondary); cursor: pointer; border: none; background: none; font-family: var(--font); border-bottom: 2px solid transparent; transition: color 0.15s; }
+    .step-tab:hover { color: var(--text); }
+    .step-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .step-tab-panel { display: none; }
+    .step-tab-panel.active { display: block; }
 
     /* ─── Frameworks ─── */
-    .frameworks { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; padding: 20px 0; }
-    .framework-pill { display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; border-radius: 999px; font-size: 15px; font-weight: 600; color: #fff; transition: transform 0.2s, box-shadow 0.2s; }
-    .framework-pill:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
-    .framework-pill.laravel  { background: #FF2D20; }
-    .framework-pill.node     { background: #339933; }
-    .framework-pill.rails    { background: #CC0000; }
-    .framework-pill.django   { background: #0C4B33; }
-    .framework-pill.js       { background: #F7DF1E; color: #000; }
+    .frameworks { display: flex; justify-content: center; gap: 56px; flex-wrap: wrap; }
+    .fw { display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: default; transition: transform 0.2s; }
+    .fw:hover { transform: translateY(-4px); }
+    .fw-icon { width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; transition: border-color 0.2s, filter 0.2s; }
+    .fw:hover .fw-icon { border-color: #3a3a4a; filter: brightness(1.15); }
+    .fw-icon svg { width: 32px; height: 32px; }
+    .fw-name { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+
+    /* ─── Comparison Table ─── */
+    .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th { padding: 14px 20px; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02); text-align: left; }
+    thead th:nth-child(2) { color: var(--accent); }
+    tbody td { padding: 13px 20px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:nth-child(even) { background: rgba(255,255,255,0.01); }
+    tbody td:first-child { color: var(--text); font-weight: 500; }
+    tbody td:nth-child(2) { border-left: 2px solid var(--accent); background: rgba(99,102,241,0.04); }
+    .cmp-yes { color: var(--green); font-weight: 600; }
+    .cmp-no { color: #4a4a5a; }
+    .cmp-paid { color: var(--amber); font-size: 12px; font-weight: 500; }
+    .cmp-free { color: var(--green); }
+    .cmp-community { color: var(--text-secondary); font-size: 13px; }
 
     /* ─── Footer ─── */
-    footer { border-top: 1px solid var(--border); padding: 32px 24px; text-align: center; }
-    .footer-inner { max-width: var(--max-w); margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
-    .footer-inner p { color: var(--text-dim); font-size: 14px; }
-    .badge { display: inline-block; padding: 4px 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--text-dim); font-weight: 500; }
+    footer { border-top: 1px solid var(--border); padding: 40px 24px; background: var(--surface); }
+    .footer-inner { max-width: var(--max-w); margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; }
+    .footer-brand { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-secondary); }
+    .footer-brand svg { color: var(--accent); }
+    .footer-links { display: flex; gap: 28px; }
+    .footer-links a { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
+    .footer-links a:hover { color: var(--text); }
+    .footer-right { display: flex; align-items: center; gap: 12px; }
+    .footer-badge { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--text-secondary); font-weight: 500; }
 
+    /* ─── Responsive ─── */
+    @media (max-width: 900px) {
+      .hero-inner { grid-template-columns: 1fr; gap: 40px; }
+      .hero-text { max-width: 100%; }
+      .hero h1 { font-size: 40px; }
+      .features { grid-template-columns: repeat(2, 1fr); }
+    }
     @media (max-width: 640px) {
-      .nav-links { gap: 16px; }
-      .hero { padding: 120px 16px 60px; }
-      .section { padding: 48px 16px; }
-      .footer-inner { justify-content: center; text-align: center; }
+      .nav-links { display: none; position: fixed; top: 60px; left: 0; right: 0; bottom: 0; background: var(--bg); flex-direction: column; padding: 24px; gap: 20px; border-top: 1px solid var(--border); }
+      .nav-links.open { display: flex; }
+      .hamburger { display: block; }
+      .hero { min-height: auto; padding: 100px 16px 60px; }
+      .hero h1 { font-size: 32px; }
+      .hero-sub { font-size: 15px; }
+      .section { padding: 64px 16px; }
+      .section-title { font-size: 28px; }
+      .features { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 1fr; gap: 12px; }
+      .steps-line { display: none; }
+      .step-num { width: 36px; height: 36px; font-size: 14px; }
+      .frameworks { gap: 24px; }
+      .footer-inner { flex-direction: column; text-align: center; }
+      .footer-links { flex-wrap: wrap; justify-content: center; }
     }
   </style>
 </head>
 <body>
-  <!-- Nav -->
+
+  <!-- Navigation -->
   <nav>
     <div class="nav-inner">
-      <a href="https://darknautica.github.io/Relay/" class="nav-logo"><span>&#9889;</span> Relay</a>
+      <a href="https://darknautica.github.io/Relay/" class="nav-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Relay
+      </a>
+      <button class="hamburger" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
       <div class="nav-links">
         <a href="docs/getting-started.html">Docs</a>
         <a href="docs/api-reference.html">API</a>
         <a href="docs/sdks.html">SDKs</a>
-        <a href="https://github.com/DarkNautica/Relay">GitHub</a>
+        <a href="https://github.com/DarkNautica/Relay" class="nav-gh">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
       </div>
     </div>
   </nav>
 
   <!-- Hero -->
   <section class="hero">
-    <h1>The open source<br><span>Pusher alternative</span></h1>
-    <p>Self-hosted, real-time WebSocket server. Replace Pusher and Ably with a single binary you control. Zero vendor lock-in. Free forever.</p>
-    <div class="hero-buttons">
-      <a href="docs/getting-started.html" class="btn btn-primary">Get Started</a>
-      <a href="https://github.com/DarkNautica/Relay" class="btn btn-secondary">View on GitHub</a>
+    <div class="hero-glow"></div>
+    <div class="hero-inner">
+      <div class="hero-text">
+        <div class="hero-badge">
+          <span class="hero-badge-dot"></span>
+          Open Source
+        </div>
+        <h1>Real-time WebSockets.<br>Self-hosted.<br>Free forever.</h1>
+        <p class="hero-sub">Replace Pusher and Ably with a single binary you control. Drop-in Pusher protocol compatibility. Works with Laravel, Node, Rails, and Django out of the box.</p>
+        <div class="hero-buttons">
+          <a href="docs/getting-started.html" class="btn btn-primary">Get Started &rarr;</a>
+          <a href="https://github.com/DarkNautica/Relay" class="btn btn-outline">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            View on GitHub
+          </a>
+        </div>
+        <div class="hero-stats">
+          MIT Licensed <span>&middot;</span> Pusher Compatible <span>&middot;</span> Single Binary
+        </div>
+      </div>
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+          <span class="terminal-title">terminal</span>
+        </div>
+        <div class="terminal-body">
+          <div><span class="prompt">$</span> <span class="cmd">docker run</span> <span class="flag">-d</span> <span class="flag">-p</span> <span class="str">6001:6001</span> <span class="cmd">\</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="flag">-e</span> <span class="str">RELAY_APP_KEY=my-key</span> <span class="cmd">\</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="flag">-e</span> <span class="str">RELAY_APP_SECRET=my-secret</span> <span class="cmd">\</span></div>
+          <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="dim">relayhq/relay:latest</span></div>
+          <br>
+          <div><span class="ok">&#10003;</span> <span class="dim">Server starting on</span> <span class="str">0.0.0.0:6001</span></div>
+          <div><span class="ok">&#10003;</span> <span class="dim">App registered:</span> <span class="str">my-key</span></div>
+          <div><span class="ok">&#10003;</span> <span class="dim">Dashboard:</span> <span class="str">http://localhost:6001/dashboard</span></div>
+          <div><span class="ok">&#10003;</span> <span class="dim">WebSocket ready &mdash; accepting connections</span></div>
+        </div>
+      </div>
     </div>
   </section>
 
-  <!-- Features -->
+  <!-- Feature Grid -->
   <section class="section">
-    <h2 class="section-title">Why Relay</h2>
-    <p class="section-sub">Everything you need for real-time, nothing you don't.</p>
+    <p class="section-label">Features</p>
+    <h2 class="section-title">Everything real-time needs. Nothing else.</h2>
+    <p class="section-sub">A single binary that handles WebSocket connections, channel management, presence tracking, and authentication.</p>
     <div class="features">
       <div class="feature">
-        <div class="feature-icon">&#127968;</div>
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/></svg>
+        </div>
         <h3>Self-Hosted</h3>
-        <p>Runs on your own server, your own terms. Full control over data and infrastructure. No third-party dependencies.</p>
+        <p>Runs on your own infrastructure. Full control over data, latency, and uptime. No third-party dependencies.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">&#128268;</div>
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 8v6"/><path d="M2 12h6m8 0h6"/><circle cx="12" cy="12" r="4"/></svg>
+        </div>
         <h3>Framework Agnostic</h3>
         <p>Official SDKs for Laravel, Node.js, Rails, and Django. Works with any language that can make HTTP requests.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">&#128260;</div>
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+        </div>
         <h3>Pusher Compatible</h3>
-        <p>Drop-in replacement for Pusher. Existing apps switch with one config change. Same protocol, same client libraries.</p>
+        <p>Drop-in replacement. Existing Pusher apps switch with one config change. Same protocol, same client libraries.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">&#128230;</div>
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        </div>
         <h3>Single Binary</h3>
-        <p>One file, no runtime, no JVM, no Node. Download and run. Or use Docker. Production-ready in seconds.</p>
+        <p>One file. No runtime, no JVM, no Node. Download and run, or use Docker. Production-ready in seconds.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">&#128064;</div>
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
         <h3>Open Source</h3>
-        <p>MIT licensed. Read every line of code. Contribute, fork, extend. Community-driven development.</p>
+        <p>MIT licensed. Read every line of code. Contribute, fork, extend. No vendor lock-in, ever.</p>
       </div>
       <div class="feature">
-        <div class="feature-icon">&#128176;</div>
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.178 8c5.096 0 5.096 8 0 8-5.095 0-7.133-8-12.739-8-4.585 0-4.585 8 0 8 5.606 0 7.644-8 12.74-8z"/></svg>
+        </div>
         <h3>Free Forever</h3>
         <p>No per-message pricing. No connection limits. No surprise bills. Unlimited everything, forever.</p>
       </div>
@@ -164,31 +301,106 @@
 
   <!-- How It Works -->
   <section class="section">
-    <h2 class="section-title">How It Works</h2>
-    <p class="section-sub">Three steps to real-time. That's it.</p>
+    <p class="section-label">Getting started</p>
+    <h2 class="section-title">Three steps to real-time</h2>
+    <p class="section-sub">From zero to production-ready WebSockets in under five minutes.</p>
     <div class="steps">
+      <div class="steps-line"></div>
       <div class="step">
         <div class="step-num">1</div>
-        <h3>Run the Server</h3>
-        <p>Single binary or Docker container. <code>docker run relayhq/relay</code> and you're live on port 6001.</p>
+        <div class="step-content">
+          <h3>Run the server</h3>
+          <p>A single Docker command. That's it.</p>
+          <div class="code-block"><span class="prompt">$</span> docker run <span class="flag">-d</span> <span class="flag">-p</span> <span class="num">6001</span>:<span class="num">6001</span> relayhq/relay:latest</div>
+        </div>
       </div>
       <div class="step">
         <div class="step-num">2</div>
-        <h3>Connect from JavaScript</h3>
-        <p>Install <code>@relayhq/relay-js</code> and subscribe to channels. Events arrive in real-time over WebSocket.</p>
+        <div class="step-content">
+          <h3>Connect from JavaScript</h3>
+          <p>Subscribe to channels and bind event handlers.</p>
+          <div class="code-block"><span class="kw">const</span> relay = <span class="kw">new</span> <span class="fn">Relay</span>(<span class="str">'my-key'</span>, { host: <span class="str">'localhost'</span> })
+<span class="kw">const</span> channel = relay.<span class="fn">subscribe</span>(<span class="str">'chat'</span>)
+channel.<span class="fn">bind</span>(<span class="str">'message'</span>, (data) => console.<span class="fn">log</span>(data))</div>
+        </div>
       </div>
       <div class="step">
         <div class="step-num">3</div>
-        <h3>Publish from Your Backend</h3>
-        <p>Use any server SDK — Laravel, Node, Rails, or Django — to publish events via a simple HTTP call.</p>
+        <div class="step-content">
+          <h3>Publish from your backend</h3>
+          <p>One HTTP call from any framework.</p>
+          <div class="step-tabs">
+            <button class="step-tab active" data-panel="s3-laravel">Laravel</button>
+            <button class="step-tab" data-panel="s3-node">Node</button>
+            <button class="step-tab" data-panel="s3-python">Python</button>
+            <button class="step-tab" data-panel="s3-ruby">Ruby</button>
+          </div>
+          <div class="step-tab-panel active" id="s3-laravel">
+            <div class="code-block"><span class="fn">broadcast</span>(<span class="kw">new</span> <span class="fn">MessageSent</span>(<span class="str">$message</span>));</div>
+          </div>
+          <div class="step-tab-panel" id="s3-node">
+            <div class="code-block"><span class="kw">await</span> relay.<span class="fn">publish</span>(<span class="str">'chat'</span>, <span class="str">'message'</span>, { text: <span class="str">'Hello'</span> })</div>
+          </div>
+          <div class="step-tab-panel" id="s3-python">
+            <div class="code-block">relay.<span class="fn">publish</span>(<span class="str">'chat'</span>, <span class="str">'message'</span>, {<span class="str">'text'</span>: <span class="str">'Hello'</span>})</div>
+          </div>
+          <div class="step-tab-panel" id="s3-ruby">
+            <div class="code-block">client.<span class="fn">publish</span>(<span class="str">'chat'</span>, <span class="str">'message'</span>, { text: <span class="str">'Hello'</span> })</div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- Comparison -->
+  <!-- Frameworks -->
   <section class="section">
-    <h2 class="section-title">Relay vs. The Rest</h2>
-    <p class="section-sub">See how Relay stacks up against paid real-time services.</p>
+    <p class="section-label">Integrations</p>
+    <h2 class="section-title">Works with your stack</h2>
+    <p class="section-sub">Official SDKs for every major framework.</p>
+    <div class="frameworks">
+      <!-- Laravel -->
+      <div class="fw">
+        <div class="fw-icon">
+          <svg viewBox="0 0 50 52" fill="none"><path d="M49.626 11.564a.809.809 0 01.028.209v10.972a.8.8 0 01-.402.694l-9.209 5.302V39.25c0 .286-.152.55-.4.694L20.42 51.01c-.044.025-.092.041-.14.058-.018.006-.035.017-.054.022a.805.805 0 01-.41 0c-.022-.006-.042-.018-.063-.026-.044-.016-.09-.03-.132-.054L.402 39.944A.801.801 0 010 39.25V6.334c0-.072.01-.142.028-.21.006-.023.02-.044.028-.067.015-.042.029-.085.051-.124.015-.026.037-.047.055-.071.023-.032.044-.065.071-.093.02-.02.047-.034.07-.052.027-.022.05-.048.08-.066h.001L9.749.308a.803.803 0 01.803 0l9.464 5.46h.002c.03.018.053.044.08.066.023.018.05.032.07.052.027.028.048.06.071.093.018.024.04.045.055.071.023.04.036.082.051.124.009.023.022.044.028.068a.809.809 0 01.028.209v20.559l8.008-4.611v-10.51c0-.07.01-.141.028-.208.007-.024.02-.045.028-.068.016-.042.03-.085.052-.124.014-.026.036-.047.054-.071.024-.032.044-.065.072-.093.02-.02.046-.034.069-.052.028-.022.051-.048.081-.066h.001l9.465-5.46a.803.803 0 01.803 0l9.464 5.46c.03.019.054.044.081.067.023.018.05.032.07.052.027.028.047.061.071.093.018.024.04.045.054.071.023.039.036.082.052.124.008.023.021.044.028.068zM48.017 22.462V12.768l-3.363 1.936-4.646 2.675v9.694l8.01-4.611zm-9.464 16.28V29.05l-4.57 2.61-12.902 7.371v9.793l17.472-10.082zM1.606 7.328v31.63L19.08 48.96v-9.793l-9.2-5.2-.002-.002-.003-.001c-.028-.018-.052-.043-.079-.065-.024-.02-.051-.034-.072-.054l-.001-.002c-.025-.025-.044-.056-.066-.086-.02-.025-.044-.048-.06-.076l-.001-.002c-.018-.034-.03-.073-.044-.112-.012-.028-.028-.053-.035-.083l-.001-.004A.812.812 0 019.5 33.3V12.768L5.133 10.09l-3.527-2.03v-.733zm8.547-5.483L2.148 6.334l8.003 4.612 8.004-4.612-8.002-5.489zm4.398 30.168l4.645-2.674V7.328L15.833 9.26l-4.646 2.675v22.078zm26.082-23.39l-8.005 4.609 8.005 4.612 8.003-4.612-8.003-4.61zm-.803 10.217l-4.645-2.675-3.363-1.936v9.694l4.645 2.674 3.363 1.937v-9.694zm-17.87 18.846l11.64-6.647 5.826-3.329-8-4.609-9.464 5.456-8.001 4.609 7.999 4.52z" fill="#FF2D20"/></svg>
+        </div>
+        <span class="fw-name">Laravel</span>
+      </div>
+      <!-- Node.js -->
+      <div class="fw">
+        <div class="fw-icon">
+          <svg viewBox="0 0 32 32" fill="none"><path d="M15.66.2a1.3 1.3 0 01.68 0l12.2 7.06c.42.24.68.7.68 1.18v14.12c0 .48-.26.94-.68 1.18L16.34 30.8a1.3 1.3 0 01-.68 0L3.46 23.74c-.42-.24-.68-.7-.68-1.18V8.44c0-.48.26-.94.68-1.18L15.66.2z" fill="#339933"/><path d="M16 9.6c-.18 0-.36.05-.52.14l-3.68 2.12c-.32.19-.52.54-.52.92v4.24c0 .38.2.73.52.92l.96.55c.47.23.64.23.86.23.7 0 1.1-.42 1.1-1.16v-4.18c0-.08-.06-.14-.14-.14h-.62c-.08 0-.14.06-.14.14v4.18c0 .33-.34.66-.9.38l-1-.58a.19.19 0 01-.08-.16v-4.24c0-.07.03-.13.08-.16l3.68-2.12a.17.17 0 01.16 0l3.68 2.12c.05.03.08.09.08.16v4.24c0 .07-.03.13-.08.16l-3.68 2.12a.17.17 0 01-.16 0l-.94-.56c-.04-.02-.1-.03-.14-.01-.46.2-.55.23-.98.35-.1.03-.27.08.06.24l1.23.73c.16.09.34.14.52.14s.36-.05.52-.14l3.68-2.12c.32-.19.52-.54.52-.92v-4.24c0-.38-.2-.73-.52-.92L16.52 9.74A1.04 1.04 0 0016 9.6z" fill="#fff"/></svg>
+        </div>
+        <span class="fw-name">Node.js</span>
+      </div>
+      <!-- Rails -->
+      <div class="fw">
+        <div class="fw-icon">
+          <svg viewBox="0 0 32 32" fill="none"><path d="M6 6h20v20H6z" rx="3" fill="#CC0000"/><path d="M12.5 20.5v-9h2.4c1.8 0 3 .5 3.5 1.5s.4 2-.3 2.8c-.5.5-1.1.8-1.8.9l2.7 3.8h-2.2l-2.5-3.6h-.6v3.6h-1.2zm1.2-4.7h1.4c.8 0 1.4-.2 1.7-.5.4-.4.5-.9.3-1.5-.2-.5-.7-.8-1.6-.8h-1.8v2.8z" fill="#fff"/></svg>
+        </div>
+        <span class="fw-name">Rails</span>
+      </div>
+      <!-- Django -->
+      <div class="fw">
+        <div class="fw-icon">
+          <svg viewBox="0 0 32 32" fill="none"><path d="M6 6h20v20H6z" rx="3" fill="#092E20"/><path d="M18.5 9v10.3c0 2-0.2 3-0.7 3.8-.5.8-1.3 1.3-2.8 1.8l-1.4-.7c1.4-.5 2-1 2.4-1.6.4-.6.5-1.4.5-3.2V9h2zm-5 2.5v5.1c-.9.2-1.6.2-2.3.2-2.2 0-3.3-1-3.3-3 0-1.9 1.2-3.1 3.4-3.1.3 0 .5 0 .7 0v-3.6h1.5v4.4zm-1.5 1c-.2 0-.4 0-.6 0-1.2 0-1.9.7-1.9 1.7 0 1.1.6 1.6 1.8 1.6.2 0 .4 0 .7 0v-3.3z" fill="#fff"/></svg>
+        </div>
+        <span class="fw-name">Django</span>
+      </div>
+      <!-- JavaScript -->
+      <div class="fw">
+        <div class="fw-icon">
+          <svg viewBox="0 0 32 32" fill="none"><rect x="2" y="2" width="28" height="28" rx="2" fill="#F7DF1E"/><path d="M9.6 24.2l2-1.2c.4.7.7 1.3 1.5 1.3s1.4-.3 1.4-1.6V14h2.5v8.8c0 2.6-1.5 3.8-3.8 3.8-2 0-3.2-1-3.6-2.4zm8.5-.3l2-1.1c.5.8 1.1 1.4 2.2 1.4 1 0 1.5-.5 1.5-1.1 0-.8-.6-1.1-1.7-1.6l-.6-.3c-1.7-.7-2.8-1.6-2.8-3.5 0-1.7 1.3-3 3.4-3 1.5 0 2.5.5 3.3 1.8l-1.8 1.2c-.4-.7-.8-1-1.5-1s-1.1.4-1.1.9c0 .6.4.9 1.4 1.3l.6.3c2 .9 3.1 1.7 3.1 3.7 0 2.1-1.6 3.3-3.8 3.3-2.1 0-3.5-1-4.2-2.3z" fill="#000"/></svg>
+        </div>
+        <span class="fw-name">JavaScript</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison Table -->
+  <section class="section">
+    <p class="section-label">Comparison</p>
+    <h2 class="section-title">Why developers choose Relay</h2>
+    <p class="section-sub">See how Relay compares to hosted real-time services.</p>
     <div class="table-wrap">
       <table>
         <thead>
@@ -200,46 +412,101 @@
           </tr>
         </thead>
         <tbody>
-          <tr><td>Self-hosted</td><td class="check">Yes</td><td class="cross">No</td><td class="cross">No</td></tr>
-          <tr><td>Open source</td><td class="check">MIT</td><td class="cross">No</td><td class="cross">No</td></tr>
-          <tr><td>Free tier limits</td><td class="check">Unlimited</td><td>200k msgs/day</td><td>6M msgs/mo</td></tr>
-          <tr><td>Per-message pricing</td><td class="check">None</td><td>$0.000017/msg</td><td>$0.0000025/msg</td></tr>
-          <tr><td>Private channels</td><td class="check">Yes</td><td class="check">Yes</td><td class="check">Yes</td></tr>
-          <tr><td>Presence channels</td><td class="check">Yes</td><td class="check">Yes</td><td class="check">Yes</td></tr>
-          <tr><td>Channel history</td><td class="check">Yes</td><td>Paid add-on</td><td class="check">Yes</td></tr>
-          <tr><td>Webhooks</td><td class="check">Yes</td><td class="check">Yes</td><td class="check">Yes</td></tr>
-          <tr><td>Laravel support</td><td class="check">Yes</td><td class="check">Yes</td><td>Community</td></tr>
-          <tr><td>Rails support</td><td class="check">Yes</td><td class="check">Yes</td><td>Community</td></tr>
-          <tr><td>Django support</td><td class="check">Yes</td><td>Community</td><td>Community</td></tr>
-          <tr><td>Node.js SDK</td><td class="check">Yes</td><td class="check">Yes</td><td class="check">Yes</td></tr>
-          <tr><td>Web dashboard</td><td class="check">Built-in</td><td class="check">Yes</td><td class="check">Yes</td></tr>
+          <tr>
+            <td>Self-hosted</td>
+            <td><span class="cmp-yes">&#10003;</span></td>
+            <td><span class="cmp-no">&#10005;</span></td>
+            <td><span class="cmp-no">&#10005;</span></td>
+          </tr>
+          <tr>
+            <td>Open source</td>
+            <td><span class="cmp-yes">MIT</span></td>
+            <td><span class="cmp-no">&#10005;</span></td>
+            <td><span class="cmp-no">&#10005;</span></td>
+          </tr>
+          <tr>
+            <td>Free connections</td>
+            <td><span class="cmp-free">Unlimited</span></td>
+            <td>100</td>
+            <td>1,000</td>
+          </tr>
+          <tr>
+            <td>Messages/day free</td>
+            <td><span class="cmp-free">Unlimited</span></td>
+            <td>200k</td>
+            <td>6M</td>
+          </tr>
+          <tr>
+            <td>Channel history</td>
+            <td><span class="cmp-yes">&#10003; Free</span></td>
+            <td><span class="cmp-paid">Paid</span></td>
+            <td><span class="cmp-paid">Paid</span></td>
+          </tr>
+          <tr>
+            <td>Webhooks</td>
+            <td><span class="cmp-yes">&#10003; Free</span></td>
+            <td><span class="cmp-paid">Paid</span></td>
+            <td><span class="cmp-paid">Paid</span></td>
+          </tr>
+          <tr>
+            <td>Multi-app</td>
+            <td><span class="cmp-yes">&#10003; Free</span></td>
+            <td><span class="cmp-paid">Paid</span></td>
+            <td><span class="cmp-paid">Paid</span></td>
+          </tr>
+          <tr>
+            <td>Laravel SDK</td>
+            <td><span class="cmp-yes">&#10003; Official</span></td>
+            <td><span class="cmp-yes">&#10003;</span></td>
+            <td><span class="cmp-community">Community</span></td>
+          </tr>
+          <tr>
+            <td>Rails SDK</td>
+            <td><span class="cmp-yes">&#10003; Official</span></td>
+            <td><span class="cmp-yes">&#10003;</span></td>
+            <td><span class="cmp-community">Community</span></td>
+          </tr>
+          <tr>
+            <td>Starting price</td>
+            <td><span class="cmp-free">$0</span></td>
+            <td>$49/mo</td>
+            <td>$29/mo</td>
+          </tr>
         </tbody>
       </table>
-    </div>
-  </section>
-
-  <!-- Frameworks -->
-  <section class="section">
-    <h2 class="section-title">Works With Your Stack</h2>
-    <p class="section-sub">Official SDKs for every major framework.</p>
-    <div class="frameworks">
-      <span class="framework-pill laravel">Laravel</span>
-      <span class="framework-pill node">Node.js</span>
-      <span class="framework-pill rails">Rails</span>
-      <span class="framework-pill django">Django</span>
-      <span class="framework-pill js">JavaScript</span>
     </div>
   </section>
 
   <!-- Footer -->
   <footer>
     <div class="footer-inner">
-      <p>Relay &mdash; Open source real-time WebSocket server</p>
-      <div>
-        <a href="https://github.com/DarkNautica/Relay" style="color:var(--text-dim); margin-right: 16px;">GitHub</a>
-        <span class="badge">MIT License</span>
+      <div class="footer-brand">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Relay &mdash; Open source real-time WebSocket server
+      </div>
+      <div class="footer-links">
+        <a href="docs/getting-started.html">Docs</a>
+        <a href="docs/api-reference.html">API Reference</a>
+        <a href="docs/sdks.html">SDKs</a>
+        <a href="https://github.com/DarkNautica/Relay">GitHub</a>
+      </div>
+      <div class="footer-right">
+        <span class="footer-badge">MIT License</span>
       </div>
     </div>
   </footer>
+
+  <script>
+    // Step 3 tab switcher
+    document.querySelectorAll('.step-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const group = tab.closest('.step-content');
+        group.querySelectorAll('.step-tab').forEach(t => t.classList.remove('active'));
+        group.querySelectorAll('.step-tab-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.panel).classList.add('active');
+      });
+    });
+  </script>
 </body>
 </html>
