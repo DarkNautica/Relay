@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "relay-python"
+version = "1.0.0"
+description = "Official Python server SDK for Relay — publish events, manage channels, authenticate users"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Relay HQ", email = "hello@relayhq.com"},
+]
+keywords = ["relay", "websocket", "realtime", "pusher", "broadcasting", "django"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Framework :: Django",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP",
+]
+
+# Zero runtime dependencies — uses Python built-in urllib and hmac
+dependencies = []
+
+[project.optional-dependencies]
+django = []
+
+[project.urls]
+Homepage = "https://github.com/relayhq/relay-python"
+Repository = "https://github.com/relayhq/relay-python"
+
+[tool.setuptools.packages.find]
+include = ["relay*"]

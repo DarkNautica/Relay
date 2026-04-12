@@ -95,6 +95,68 @@ class MessageSent implements ShouldBroadcast
 broadcast(new MessageSent($message));
 ```
 
+### 4. Publish from Node.js
+
+```bash
+npm install @relayhq/relay-node
+```
+
+```typescript
+import { RelayClient } from '@relayhq/relay-node'
+
+const relay = new RelayClient({
+  host: '127.0.0.1',
+  port: 6001,
+  appId: 'my-app',
+  key: 'my-key',
+  secret: 'my-secret',
+})
+
+await relay.publish('chat', 'new-message', { text: 'Hello!' })
+```
+
+### 5. Publish from Rails
+
+```ruby
+# Gemfile
+gem 'relay-ruby'
+```
+
+```yaml
+# config/cable.yml
+production:
+  adapter: relay
+  host: 127.0.0.1
+  port: 6001
+  app_id: my-app
+  key: my-key
+  secret: my-secret
+```
+
+```ruby
+ActionCable.server.broadcast('chat', { message: 'Hello!' })
+```
+
+### 6. Publish from Django / Python
+
+```bash
+pip install relay-python
+```
+
+```python
+from relay import RelayClient
+
+relay = RelayClient(
+    host='127.0.0.1',
+    port=6001,
+    app_id='my-app',
+    key='my-key',
+    secret='my-secret',
+)
+
+relay.publish('chat', 'new-message', {'text': 'Hello!'})
+```
+
 ---
 
 ## Channel Types
@@ -109,12 +171,15 @@ broadcast(new MessageSent($message));
 
 ## Repositories
 
-| Repo            | Description                     |
-|-----------------|---------------------------------|
-| relay-server    | Go server — the core            |
-| relay-js        | JavaScript/TypeScript client SDK|
-| relay-php       | Laravel Broadcasting driver     |
-| relay-docs      | Documentation site              |
+| Repo            | Description                          |
+|-----------------|--------------------------------------|
+| relay-server    | Go server — the core                 |
+| relay-js        | JavaScript/TypeScript client SDK     |
+| relay-php       | Laravel Broadcasting driver          |
+| relay-node      | Node.js server SDK                   |
+| relay-ruby      | Ruby / Rails server SDK              |
+| relay-python    | Python / Django server SDK           |
+| relay-docs      | Documentation site                   |
 
 ---
 
@@ -129,8 +194,9 @@ broadcast(new MessageSent($message));
 - [ ] Channel history / replay
 - [ ] Webhook support
 - [ ] Horizontal scaling (Redis)
-- [ ] Rails driver
-- [ ] Django driver
+- [x] Node.js server SDK
+- [x] Rails driver
+- [x] Django driver
 - [ ] Relay Cloud (managed hosting)
 
 ---

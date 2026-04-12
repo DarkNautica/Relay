@@ -1,0 +1,34 @@
+{
+  "name": "@relayhq/relay-node",
+  "version": "1.0.0",
+  "description": "Official Node.js server SDK for Relay — publish events, manage channels, authenticate users",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "relay",
+    "websocket",
+    "realtime",
+    "pusher",
+    "broadcasting"
+  ],
+  "author": "Relay HQ",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/relayhq/relay-node"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
