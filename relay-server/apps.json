@@ -1,0 +1,8 @@
+[
+  {
+    "id": "app-1",
+    "key": "key-1",
+    "secret": "secret-1",
+    "max_connections": 1000
+  }
+]

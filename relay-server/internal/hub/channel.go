@@ -141,6 +141,7 @@ type ChannelInfo struct {
 	Type            string `json:"type"`
 	SubscriberCount int    `json:"subscriber_count"`
 	Occupied        bool   `json:"occupied"`
+	AppID           string `json:"app_id,omitempty"`
 }
 
 func (ch *Channel) Info() ChannelInfo {

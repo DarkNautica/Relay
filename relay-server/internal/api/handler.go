@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/relayhq/relay-server/internal/apps"
 	"github.com/relayhq/relay-server/internal/auth"
 	"github.com/relayhq/relay-server/internal/config"
+	"github.com/relayhq/relay-server/internal/history"
 	"github.com/relayhq/relay-server/internal/hub"
 	"github.com/relayhq/relay-server/internal/protocol"
 	"github.com/relayhq/relay-server/internal/ratelimit"
@@ -19,14 +22,16 @@ import (
 type Handler struct {
 	hub            *hub.Hub
 	cfg            *config.Config
+	registry       *apps.AppRegistry
 	publishLimiter *ratelimit.Limiter
 }
 
 // NewHandler creates an API handler.
-func NewHandler(h *hub.Hub, cfg *config.Config) *Handler {
+func NewHandler(h *hub.Hub, cfg *config.Config, registry *apps.AppRegistry) *Handler {
 	return &Handler{
 		hub:            h,
 		cfg:            cfg,
+		registry:       registry,
 		publishLimiter: ratelimit.NewLimiter(1000, 1*time.Minute),
 	}
 }
@@ -43,16 +48,23 @@ func (h *Handler) RateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// AuthenticateMiddleware returns a wrapper that checks Bearer {appSecret}.
+// AuthenticateMiddleware looks up the app by ID from the URL and checks Bearer {appSecret}.
 func (h *Handler) AuthenticateMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		auth := r.Header.Get("Authorization")
-		if !strings.HasPrefix(auth, "Bearer ") {
+		appID := mux.Vars(r)["appId"]
+		app, ok := h.registry.LookupByID(appID)
+		if !ok {
+			jsonError(w, http.StatusUnauthorized, "Unknown app ID")
+			return
+		}
+
+		authHeader := r.Header.Get("Authorization")
+		if !strings.HasPrefix(authHeader, "Bearer ") {
 			jsonError(w, http.StatusUnauthorized, "Missing or invalid Authorization header")
 			return
 		}
-		token := strings.TrimPrefix(auth, "Bearer ")
-		if token != h.cfg.AppSecret {
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		if token != app.Secret {
 			jsonError(w, http.StatusForbidden, "Invalid app secret")
 			return
 		}
@@ -62,6 +74,7 @@ func (h *Handler) AuthenticateMiddleware(next http.HandlerFunc) http.HandlerFunc
 
 // PublishEvent handles POST /apps/{appId}/events
 func (h *Handler) PublishEvent(w http.ResponseWriter, r *http.Request) {
+	appID := mux.Vars(r)["appId"]
 	var req protocol.PublishRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, http.StatusBadRequest, "Invalid JSON body")
@@ -73,12 +86,14 @@ func (h *Handler) PublishEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	req.AppID = appID
 	h.hub.Publish <- &req
 	jsonOK(w, map[string]any{"ok": true})
 }
 
 // PublishBatch handles POST /apps/{appId}/events/batch
 func (h *Handler) PublishBatch(w http.ResponseWriter, r *http.Request) {
+	appID := mux.Vars(r)["appId"]
 	var req protocol.BatchPublishRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, http.StatusBadRequest, "Invalid JSON body")
@@ -86,6 +101,7 @@ func (h *Handler) PublishBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for i := range req.Batch {
+		req.Batch[i].AppID = appID
 		h.hub.Publish <- &req.Batch[i]
 	}
 	jsonOK(w, map[string]any{"ok": true, "count": len(req.Batch)})
@@ -93,14 +109,22 @@ func (h *Handler) PublishBatch(w http.ResponseWriter, r *http.Request) {
 
 // GetChannels handles GET /apps/{appId}/channels
 func (h *Handler) GetChannels(w http.ResponseWriter, r *http.Request) {
-	channels := h.hub.GetChannels()
+	appID := mux.Vars(r)["appId"]
+	channels := h.hub.GetChannels(appID)
+	jsonOK(w, map[string]any{"channels": channels})
+}
+
+// GetAllChannels handles GET /dashboard/api/channels (no auth, all apps).
+func (h *Handler) GetAllChannels(w http.ResponseWriter, r *http.Request) {
+	channels := h.hub.GetAllChannels()
 	jsonOK(w, map[string]any{"channels": channels})
 }
 
 // GetChannel handles GET /apps/{appId}/channels/{channelName}
 func (h *Handler) GetChannel(w http.ResponseWriter, r *http.Request) {
+	appID := mux.Vars(r)["appId"]
 	name := mux.Vars(r)["channelName"]
-	info := h.hub.GetChannel(name)
+	info := h.hub.GetChannel(appID, name)
 	if info == nil {
 		jsonError(w, http.StatusNotFound, "Channel not found")
 		return
@@ -110,14 +134,14 @@ func (h *Handler) GetChannel(w http.ResponseWriter, r *http.Request) {
 
 // GetChannelUsers handles GET /apps/{appId}/channels/{channelName}/users
 func (h *Handler) GetChannelUsers(w http.ResponseWriter, r *http.Request) {
+	appID := mux.Vars(r)["appId"]
 	name := mux.Vars(r)["channelName"]
-	members := h.hub.GetChannelMembers(name)
+	members := h.hub.GetChannelMembers(appID, name)
 	if members == nil {
 		jsonError(w, http.StatusNotFound, "Channel not found")
 		return
 	}
 
-	// Flatten to a list of user objects
 	users := make([]any, 0, len(members))
 	for _, m := range members {
 		users = append(users, m)
@@ -126,10 +150,14 @@ func (h *Handler) GetChannelUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 // AuthChannel handles POST /apps/{appId}/auth
-// This endpoint is called by the client SDK (e.g. relay-js) when subscribing
-// to private or presence channels. It does NOT require Bearer auth — the user's
-// own application is responsible for authenticating the request before calling this.
 func (h *Handler) AuthChannel(w http.ResponseWriter, r *http.Request) {
+	appID := mux.Vars(r)["appId"]
+	app, ok := h.registry.LookupByID(appID)
+	if !ok {
+		jsonError(w, http.StatusUnauthorized, "Unknown app ID")
+		return
+	}
+
 	var req struct {
 		SocketID    string `json:"socket_id"`
 		ChannelName string `json:"channel_name"`
@@ -145,7 +173,7 @@ func (h *Handler) AuthChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := auth.Sign(h.cfg.AppKey, h.cfg.AppSecret, req.SocketID, req.ChannelName, req.ChannelData)
+	token := auth.Sign(app.Key, app.Secret, req.SocketID, req.ChannelName, req.ChannelData)
 
 	resp := map[string]string{"auth": token}
 	if req.ChannelData != "" {
@@ -154,9 +182,40 @@ func (h *Handler) AuthChannel(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, resp)
 }
 
+// GetChannelEvents handles GET /apps/{appId}/channels/{channelName}/events
+func (h *Handler) GetChannelEvents(w http.ResponseWriter, r *http.Request) {
+	appID := mux.Vars(r)["appId"]
+	channelName := mux.Vars(r)["channelName"]
+
+	limit := 50
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	if h.hub.History == nil {
+		jsonOK(w, map[string]any{"events": []any{}})
+		return
+	}
+
+	events := h.hub.History.GetNewest(appID, channelName, limit)
+	if events == nil {
+		events = make([]history.Event, 0)
+	}
+	jsonOK(w, map[string]any{"events": events})
+}
+
 // GetEventLog handles GET /apps/{appId}/events/log
 func (h *Handler) GetEventLog(w http.ResponseWriter, r *http.Request) {
-	events := h.hub.GetEventLog(20)
+	appID := mux.Vars(r)["appId"]
+	events := h.hub.GetEventLog(20, appID)
+	jsonOK(w, map[string]any{"events": events})
+}
+
+// GetAllEvents handles GET /dashboard/api/events (no auth, all apps).
+func (h *Handler) GetAllEvents(w http.ResponseWriter, r *http.Request) {
+	events := h.hub.GetEventLog(20, "")
 	jsonOK(w, map[string]any{"events": events})
 }
 
@@ -165,6 +224,7 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]any{
 		"connections": h.hub.ConnectionCount(),
 		"channels":    h.hub.ChannelCount(),
+		"apps":        h.hub.AppStats(),
 	})
 }
 

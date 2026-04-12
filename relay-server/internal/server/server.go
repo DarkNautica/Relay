@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/relayhq/relay-server/internal/api"
+	"github.com/relayhq/relay-server/internal/apps"
 	"github.com/relayhq/relay-server/internal/config"
 	"github.com/relayhq/relay-server/internal/dashboard"
 	"github.com/relayhq/relay-server/internal/hub"
@@ -17,14 +18,16 @@ import (
 type Server struct {
 	cfg        *config.Config
 	hub        *hub.Hub
+	registry   *apps.AppRegistry
 	httpServer *http.Server
 }
 
 // New creates a new Server.
-func New(cfg *config.Config, h *hub.Hub) *Server {
+func New(cfg *config.Config, h *hub.Hub, registry *apps.AppRegistry) *Server {
 	s := &Server{
-		cfg: cfg,
-		hub: h,
+		cfg:      cfg,
+		hub:      h,
+		registry: registry,
 	}
 	s.httpServer = &http.Server{
 		Addr:         cfg.Addr(),
@@ -52,29 +55,30 @@ func (s *Server) Shutdown() {
 func (s *Server) buildRouter() http.Handler {
 	r := mux.NewRouter()
 
-	// WebSocket endpoint — this is where browsers connect
-	wsHandler := wshandler.NewHandler(s.hub, s.cfg)
+	// WebSocket endpoint
+	wsHandler := wshandler.NewHandler(s.hub, s.cfg, s.registry)
 	r.Handle("/app/{appKey}", wsHandler)
 
-	// REST API — authenticated with Bearer {appSecret}
-	apiHandler := api.NewHandler(s.hub, s.cfg)
-	auth := apiHandler.AuthenticateMiddleware
+	// REST API
+	apiHandler := api.NewHandler(s.hub, s.cfg, s.registry)
+	authMW := apiHandler.AuthenticateMiddleware
 	rl := apiHandler.RateLimitMiddleware
 
 	appsRouter := r.PathPrefix("/apps/{appId}").Subrouter()
-	appsRouter.HandleFunc("/events", rl(auth(apiHandler.PublishEvent))).Methods(http.MethodPost)
-	appsRouter.HandleFunc("/events/batch", rl(auth(apiHandler.PublishBatch))).Methods(http.MethodPost)
-	appsRouter.HandleFunc("/channels", auth(apiHandler.GetChannels)).Methods(http.MethodGet)
-	appsRouter.HandleFunc("/channels/{channelName}", auth(apiHandler.GetChannel)).Methods(http.MethodGet)
-	appsRouter.HandleFunc("/channels/{channelName}/users", auth(apiHandler.GetChannelUsers)).Methods(http.MethodGet)
+	appsRouter.HandleFunc("/events", rl(authMW(apiHandler.PublishEvent))).Methods(http.MethodPost)
+	appsRouter.HandleFunc("/events/batch", rl(authMW(apiHandler.PublishBatch))).Methods(http.MethodPost)
+	appsRouter.HandleFunc("/channels", authMW(apiHandler.GetChannels)).Methods(http.MethodGet)
+	appsRouter.HandleFunc("/channels/{channelName}", authMW(apiHandler.GetChannel)).Methods(http.MethodGet)
+	appsRouter.HandleFunc("/channels/{channelName}/users", authMW(apiHandler.GetChannelUsers)).Methods(http.MethodGet)
+	appsRouter.HandleFunc("/channels/{channelName}/events", authMW(apiHandler.GetChannelEvents)).Methods(http.MethodGet)
 
-	// Auth endpoint — no Bearer auth (the user's app authenticates this)
+	// Auth endpoint — no Bearer auth
 	appsRouter.HandleFunc("/auth", apiHandler.AuthChannel).Methods(http.MethodPost)
 
 	// Event log for dashboard
-	appsRouter.HandleFunc("/events/log", auth(apiHandler.GetEventLog)).Methods(http.MethodGet)
+	appsRouter.HandleFunc("/events/log", authMW(apiHandler.GetEventLog)).Methods(http.MethodGet)
 
-	// Stats endpoint (no auth — useful for health checks)
+	// Stats endpoint (no auth)
 	r.HandleFunc("/stats", apiHandler.GetStats).Methods(http.MethodGet)
 
 	// Health check
@@ -87,14 +91,15 @@ func (s *Server) buildRouter() http.Handler {
 	if s.cfg.DashboardEnabled {
 		dash := dashboard.NewHandler()
 		r.Handle(s.cfg.DashboardPath, dash).Methods(http.MethodGet)
+		// Dashboard API endpoints (no auth — access controlled by dashboard toggle)
+		r.HandleFunc("/dashboard/api/channels", apiHandler.GetAllChannels).Methods(http.MethodGet)
+		r.HandleFunc("/dashboard/api/events", apiHandler.GetAllEvents).Methods(http.MethodGet)
 	}
 
-	// CORS middleware
 	return corsMiddleware(r)
 }
 
 // corsMiddleware adds permissive CORS headers.
-// In production, restrict the allowed origins.
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")

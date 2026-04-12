@@ -3,12 +3,16 @@ package hub
 import (
 	"encoding/json"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/relayhq/relay-server/internal/apps"
 	"github.com/relayhq/relay-server/internal/auth"
 	"github.com/relayhq/relay-server/internal/config"
+	"github.com/relayhq/relay-server/internal/history"
 	"github.com/relayhq/relay-server/internal/protocol"
+	"github.com/relayhq/relay-server/internal/webhook"
 )
 
 // incomingMessage wraps a message with its sender for routing.
@@ -26,11 +30,14 @@ type Hub struct {
 	// All currently connected clients (key: socket ID)
 	clients map[string]*Client
 
-	// All active channels (key: channel name)
+	// All active channels (key: appID + "\x00" + channelName)
 	channels map[string]*Channel
 
 	// Config reference
 	cfg *config.Config
+
+	// App registry
+	registry *apps.AppRegistry
 
 	// Inbound channels for the event loop
 	register   chan *Client
@@ -44,6 +51,12 @@ type Hub struct {
 	eventLog    [100]EventLogEntry
 	eventLogPos int
 	eventLogLen int
+
+	// History store for channel event replay
+	History *history.Store
+
+	// Webhook dispatcher
+	Webhooks *webhook.Dispatcher
 }
 
 // EventLogEntry records a published event for the dashboard.
@@ -51,14 +64,21 @@ type EventLogEntry struct {
 	Timestamp string `json:"timestamp"`
 	Channel   string `json:"channel"`
 	Event     string `json:"event"`
+	AppID     string `json:"app_id"`
+}
+
+// channelKey builds a composite key for the channels map.
+func channelKey(appID, channelName string) string {
+	return appID + "\x00" + channelName
 }
 
 // NewHub creates a Hub ready to be started with Run().
-func NewHub(cfg *config.Config) *Hub {
+func NewHub(cfg *config.Config, registry *apps.AppRegistry) *Hub {
 	return &Hub{
 		clients:    make(map[string]*Client),
 		channels:   make(map[string]*Channel),
 		cfg:        cfg,
+		registry:   registry,
 		register:   make(chan *Client, 256),
 		unregister: make(chan *Client, 256),
 		incoming:   make(chan *incomingMessage, 1024),
@@ -67,12 +87,9 @@ func NewHub(cfg *config.Config) *Hub {
 }
 
 // Run starts the hub's event loop. This should be called in its own goroutine.
-// It processes all register/unregister/message events sequentially,
-// avoiding the need for most locking.
 func (h *Hub) Run() {
 	for {
 		select {
-
 		case client := <-h.register:
 			h.handleRegister(client)
 
@@ -88,13 +105,6 @@ func (h *Hub) Run() {
 	}
 }
 
-// NewClient creates a new client, registers it, and returns it.
-// Called from the WebSocket upgrade handler.
-func (h *Hub) NewClient(conn interface{}, wsConn interface{}) *Client {
-	// This is called from websocket handler — see websocket/handler.go
-	return nil
-}
-
 // --- Event Loop Handlers ---
 
 func (h *Hub) handleRegister(client *Client) {
@@ -104,10 +114,9 @@ func (h *Hub) handleRegister(client *Client) {
 	h.mu.Unlock()
 
 	if h.cfg.Debug {
-		log.Printf("[Relay] Client connected: %s (total: %d)", client.SocketID, count)
+		log.Printf("[Relay] Client connected: %s app=%s (total: %d)", client.SocketID, client.app.ID, count)
 	}
 
-	// Send the connection established event
 	if err := client.sendConnectionEstablished(); err != nil {
 		log.Printf("[Relay] Error sending connection_established to %s: %v", client.SocketID, err)
 	}
@@ -123,23 +132,25 @@ func (h *Hub) handleUnregister(client *Client) {
 	close(client.send)
 	h.mu.Unlock()
 
-	// Unsubscribe from all channels and broadcast presence removals
 	h.mu.Lock()
 	for channelName := range client.subscriptions {
-		ch, ok := h.channels[channelName]
+		key := channelKey(client.app.ID, channelName)
+		ch, ok := h.channels[key]
 		if !ok {
 			continue
 		}
 		member := ch.Unsubscribe(client)
 
-		// Broadcast member_removed to presence channels
 		if ch.Type == protocol.ChannelTypePresence && member != nil {
 			go h.broadcastMemberRemoved(ch, member)
+			h.fireWebhook(client.app, "member.removed", channelName, map[string]any{
+				"user_id": member.ID, "user_info": member.Info,
+			})
 		}
 
-		// Clean up empty channels
 		if ch.IsEmpty() {
-			delete(h.channels, channelName)
+			delete(h.channels, key)
+			h.fireWebhook(client.app, "channel.vacated", channelName, nil)
 		}
 	}
 	h.mu.Unlock()
@@ -168,7 +179,6 @@ func (h *Hub) handleIncoming(im *incomingMessage) {
 		h.handlePing(client)
 
 	default:
-		// Client events (prefixed with "client-") are forwarded to the channel
 		if len(msg.Event) > 7 && msg.Event[:7] == "client-" {
 			h.handleClientEvent(client, msg)
 		}
@@ -176,7 +186,6 @@ func (h *Hub) handleIncoming(im *incomingMessage) {
 }
 
 func (h *Hub) handleSubscribe(client *Client, msg *protocol.Message) {
-	// Parse subscribe payload
 	var subData protocol.SubscribeData
 	if err := json.Unmarshal(msg.Data, &subData); err != nil {
 		h.sendError(client, 4000, "Invalid subscribe payload")
@@ -196,35 +205,39 @@ func (h *Hub) handleSubscribe(client *Client, msg *protocol.Message) {
 
 	channelType := protocol.ChannelTypeFromName(channelName)
 
-	// Validate auth for private and presence channels
 	if channelType == protocol.ChannelTypePrivate || channelType == protocol.ChannelTypePresence {
 		channelData := ""
 		if channelType == protocol.ChannelTypePresence {
 			channelData = subData.ChannelData
 		}
-		if !h.validateAuth(client.SocketID, channelName, subData.Auth, channelData) {
+		if !h.validateAuth(client.app.Key, client.app.Secret, client.SocketID, channelName, subData.Auth, channelData) {
 			h.sendError(client, 4009, "Invalid authentication signature")
 			return
 		}
 	}
 
-	// Get or create the channel
+	key := channelKey(client.app.ID, channelName)
 	h.mu.Lock()
-	ch, ok := h.channels[channelName]
+	ch, ok := h.channels[key]
+	isNewChannel := false
 	if !ok {
 		ch = newChannel(channelName)
-		h.channels[channelName] = ch
+		h.channels[key] = ch
+		isNewChannel = true
 	}
 	h.mu.Unlock()
 
-	// Subscribe the client
 	if err := ch.Subscribe(client, subData.ChannelData); err != nil {
 		h.sendError(client, 4000, err.Error())
 		return
 	}
 	client.subscriptions[channelName] = true
 
-	// Build subscription_succeeded response
+	// Fire channel.occupied webhook on first subscriber
+	if isNewChannel {
+		h.fireWebhook(client.app, "channel.occupied", channelName, nil)
+	}
+
 	var successData any = map[string]any{}
 	if channelType == protocol.ChannelTypePresence {
 		successData = ch.PresenceData()
@@ -237,11 +250,26 @@ func (h *Hub) handleSubscribe(client *Client, msg *protocol.Message) {
 	}
 	client.SendMessage(successMsg)
 
-	// For presence channels, notify existing members of the new arrival
+	// Replay history if last_event_id was provided and app has history enabled
+	if subData.LastEventID > 0 && h.History != nil && client.app.History {
+		events := h.History.GetAfterID(client.app.ID, channelName, subData.LastEventID, client.app.HistoryLimit)
+		for _, e := range events {
+			replayMsg := &protocol.Message{
+				Event:   e.EventName,
+				Channel: channelName,
+				Data:    e.Data,
+			}
+			client.SendMessage(replayMsg)
+		}
+	}
+
 	if channelType == protocol.ChannelTypePresence && subData.ChannelData != "" {
 		var member protocol.PresenceMember
 		if err := json.Unmarshal([]byte(subData.ChannelData), &member); err == nil {
 			go h.broadcastMemberAdded(ch, client.SocketID, &member)
+			h.fireWebhook(client.app, "member.added", channelName, map[string]any{
+				"user_id": member.ID, "user_info": member.Info,
+			})
 		}
 	}
 
@@ -257,8 +285,9 @@ func (h *Hub) handleUnsubscribe(client *Client, msg *protocol.Message) {
 	}
 
 	channelName := subData.Channel
+	key := channelKey(client.app.ID, channelName)
 	h.mu.Lock()
-	ch, ok := h.channels[channelName]
+	ch, ok := h.channels[key]
 	h.mu.Unlock()
 
 	if !ok {
@@ -270,11 +299,15 @@ func (h *Hub) handleUnsubscribe(client *Client, msg *protocol.Message) {
 
 	if ch.Type == protocol.ChannelTypePresence && member != nil {
 		go h.broadcastMemberRemoved(ch, member)
+		h.fireWebhook(client.app, "member.removed", channelName, map[string]any{
+			"user_id": member.ID, "user_info": member.Info,
+		})
 	}
 
 	h.mu.Lock()
 	if ch.IsEmpty() {
-		delete(h.channels, channelName)
+		delete(h.channels, key)
+		h.fireWebhook(client.app, "channel.vacated", channelName, nil)
 	}
 	h.mu.Unlock()
 }
@@ -285,25 +318,23 @@ func (h *Hub) handlePing(client *Client) {
 }
 
 func (h *Hub) handleClientEvent(client *Client, msg *protocol.Message) {
-	// Client events are forwarded to the channel, excluding the sender
 	if msg.Channel == "" {
 		return
 	}
 
+	key := channelKey(client.app.ID, msg.Channel)
 	h.mu.RLock()
-	ch, ok := h.channels[msg.Channel]
+	ch, ok := h.channels[key]
 	h.mu.RUnlock()
 
 	if !ok {
 		return
 	}
 
-	// Only subscribed clients can send client events
 	if !client.subscriptions[msg.Channel] {
 		return
 	}
 
-	// Only private and presence channels allow client events
 	if ch.Type == protocol.ChannelTypePublic {
 		return
 	}
@@ -312,12 +343,12 @@ func (h *Hub) handleClientEvent(client *Client, msg *protocol.Message) {
 }
 
 func (h *Hub) handlePublish(req *protocol.PublishRequest) {
+	key := channelKey(req.AppID, req.Channel)
 	h.mu.RLock()
-	ch, ok := h.channels[req.Channel]
+	ch, ok := h.channels[key]
 	h.mu.RUnlock()
 
 	if !ok {
-		// No subscribers — that's fine, not an error
 		return
 	}
 
@@ -329,12 +360,21 @@ func (h *Hub) handlePublish(req *protocol.PublishRequest) {
 
 	ch.Broadcast(msg, req.SocketID)
 
+	// Record to history if enabled for this app
+	if h.History != nil {
+		app, ok := h.registry.LookupByID(req.AppID)
+		if ok && app.History {
+			h.History.Record(req.AppID, req.Channel, req.Event, req.Data, app.HistoryLimit)
+		}
+	}
+
 	// Record to event log ring buffer
 	h.mu.Lock()
 	h.eventLog[h.eventLogPos] = EventLogEntry{
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Channel:   req.Channel,
 		Event:     req.Event,
+		AppID:     req.AppID,
 	}
 	h.eventLogPos = (h.eventLogPos + 1) % len(h.eventLog)
 	if h.eventLogLen < len(h.eventLog) {
@@ -343,7 +383,7 @@ func (h *Hub) handlePublish(req *protocol.PublishRequest) {
 	h.mu.Unlock()
 
 	if h.cfg.Debug {
-		log.Printf("[Relay] Published event=%s channel=%s", req.Event, req.Channel)
+		log.Printf("[Relay] Published event=%s channel=%s app=%s", req.Event, req.Channel, req.AppID)
 	}
 }
 
@@ -365,10 +405,18 @@ func (h *Hub) broadcastMemberRemoved(ch *Channel, member *protocol.PresenceMembe
 	ch.Broadcast(msg, "")
 }
 
+// --- Webhook Helper ---
+
+func (h *Hub) fireWebhook(app *apps.App, event, channel string, extra map[string]any) {
+	if h.Webhooks != nil {
+		go h.Webhooks.Fire(app, event, channel, extra)
+	}
+}
+
 // --- Auth Validation ---
 
-func (h *Hub) validateAuth(socketID, channelName, authToken, channelData string) bool {
-	return auth.Validate(h.cfg.AppKey, h.cfg.AppSecret, socketID, channelName, authToken, channelData)
+func (h *Hub) validateAuth(appKey, appSecret, socketID, channelName, authToken, channelData string) bool {
+	return auth.Validate(appKey, appSecret, socketID, channelName, authToken, channelData)
 }
 
 // --- Error Handling ---
@@ -386,35 +434,58 @@ func (h *Hub) sendError(client *Client, code int, message string) {
 
 // --- Public API for HTTP handlers ---
 
-// GetChannels returns info about all active channels.
-func (h *Hub) GetChannels() []ChannelInfo {
+// GetChannels returns info about all active channels for the given app.
+func (h *Hub) GetChannels(appID string) []ChannelInfo {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	prefix := appID + "\x00"
+	infos := make([]ChannelInfo, 0)
+	for key, ch := range h.channels {
+		if strings.HasPrefix(key, prefix) {
+			info := ch.Info()
+			info.AppID = appID
+			infos = append(infos, info)
+		}
+	}
+	return infos
+}
+
+// GetAllChannels returns info about all active channels across all apps.
+func (h *Hub) GetAllChannels() []ChannelInfo {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
 	infos := make([]ChannelInfo, 0, len(h.channels))
-	for _, ch := range h.channels {
-		infos = append(infos, ch.Info())
+	for key, ch := range h.channels {
+		info := ch.Info()
+		idx := strings.IndexByte(key, '\x00')
+		if idx >= 0 {
+			info.AppID = key[:idx]
+		}
+		infos = append(infos, info)
 	}
 	return infos
 }
 
 // GetChannel returns info about a specific channel, or nil if not found.
-func (h *Hub) GetChannel(name string) *ChannelInfo {
+func (h *Hub) GetChannel(appID, name string) *ChannelInfo {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	ch, ok := h.channels[name]
+	ch, ok := h.channels[channelKey(appID, name)]
 	if !ok {
 		return nil
 	}
 	info := ch.Info()
+	info.AppID = appID
 	return &info
 }
 
 // GetChannelMembers returns presence members for a channel.
-func (h *Hub) GetChannelMembers(name string) map[string]*protocol.PresenceMember {
+func (h *Hub) GetChannelMembers(appID, name string) map[string]*protocol.PresenceMember {
 	h.mu.RLock()
-	ch, ok := h.channels[name]
+	ch, ok := h.channels[channelKey(appID, name)]
 	h.mu.RUnlock()
 
 	if !ok {
@@ -437,18 +508,50 @@ func (h *Hub) ChannelCount() int {
 	return len(h.channels)
 }
 
-// GetEventLog returns the last n events from the ring buffer in reverse chronological order.
-func (h *Hub) GetEventLog(n int) []EventLogEntry {
+// AppStats returns per-app connection and channel counts.
+func (h *Hub) AppStats() []map[string]any {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	if n > h.eventLogLen {
-		n = h.eventLogLen
+	connCounts := make(map[string]int)
+	for _, c := range h.clients {
+		connCounts[c.app.ID]++
 	}
-	result := make([]EventLogEntry, n)
-	for i := 0; i < n; i++ {
+
+	chanCounts := make(map[string]int)
+	for key := range h.channels {
+		idx := strings.IndexByte(key, '\x00')
+		if idx >= 0 {
+			chanCounts[key[:idx]]++
+		}
+	}
+
+	allApps := h.registry.All()
+	stats := make([]map[string]any, 0, len(allApps))
+	for _, app := range allApps {
+		stats = append(stats, map[string]any{
+			"id":          app.ID,
+			"key":         app.Key,
+			"connections": connCounts[app.ID],
+			"channels":    chanCounts[app.ID],
+		})
+	}
+	return stats
+}
+
+// GetEventLog returns the last n events from the ring buffer in reverse chronological order.
+// If appID is non-empty, only events for that app are returned.
+func (h *Hub) GetEventLog(n int, appID string) []EventLogEntry {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	result := make([]EventLogEntry, 0, n)
+	for i := 0; i < h.eventLogLen && len(result) < n; i++ {
 		idx := (h.eventLogPos - 1 - i + len(h.eventLog)) % len(h.eventLog)
-		result[i] = h.eventLog[idx]
+		entry := h.eventLog[idx]
+		if appID == "" || entry.AppID == appID {
+			result = append(result, entry)
+		}
 	}
 	return result
 }
@@ -478,7 +581,6 @@ func (h *Hub) Shutdown() {
 		}
 	}
 
-	// Give clients 1 second to receive the shutdown message
 	time.Sleep(1 * time.Second)
 
 	for socketID, client := range h.clients {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/relayhq/relay-server/internal/apps"
 	"github.com/relayhq/relay-server/internal/config"
 	"github.com/relayhq/relay-server/internal/protocol"
 )
@@ -49,10 +50,13 @@ type Client struct {
 
 	// Config reference
 	cfg *config.Config
+
+	// The app this client authenticated with
+	app *apps.App
 }
 
 // newClient creates a new Client with a generated socket ID.
-func newClient(hub *Hub, conn *websocket.Conn, cfg *config.Config) *Client {
+func newClient(hub *Hub, conn *websocket.Conn, cfg *config.Config, app *apps.App) *Client {
 	return &Client{
 		SocketID:      generateSocketID(),
 		hub:           hub,
@@ -60,6 +64,7 @@ func newClient(hub *Hub, conn *websocket.Conn, cfg *config.Config) *Client {
 		send:          make(chan []byte, sendBufferSize),
 		subscriptions: make(map[string]bool),
 		cfg:           cfg,
+		app:           app,
 	}
 }
 

@@ -101,6 +101,7 @@ type SubscribeData struct {
 	Channel     string `json:"channel"`
 	Auth        string `json:"auth,omitempty"`
 	ChannelData string `json:"channel_data,omitempty"`
+	LastEventID int64  `json:"last_event_id,omitempty"`
 }
 
 // PresenceMember represents a member in a presence channel.
@@ -130,6 +131,7 @@ type PublishRequest struct {
 	Event    string          `json:"event"`
 	Data     json.RawMessage `json:"data"`
 	SocketID string          `json:"socket_id,omitempty"` // Exclude this socket from receiving
+	AppID    string          `json:"-"`                   // Set by the API handler from the URL
 }
 
 // BatchPublishRequest is the body for the HTTP batch publish API.

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/relayhq/relay-server/internal/apps"
 	"github.com/relayhq/relay-server/internal/config"
 	"github.com/relayhq/relay-server/internal/hub"
 	"github.com/relayhq/relay-server/internal/protocol"
@@ -20,7 +21,6 @@ import (
 func startTestServer(t *testing.T) (baseURL string, cleanup func()) {
 	t.Helper()
 
-	// Find a free port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("failed to find free port: %v", err)
@@ -44,13 +44,20 @@ func startTestServer(t *testing.T) (baseURL string, cleanup func()) {
 		Debug:                false,
 	}
 
-	h := hub.NewHub(cfg)
+	registry := apps.NewRegistry()
+	registry.Register(&apps.App{
+		ID:             "test-app",
+		Key:            "test-key",
+		Secret:         "test-secret",
+		MaxConnections: 100,
+	})
+
+	h := hub.NewHub(cfg, registry)
 	go h.Run()
 
-	srv := server.New(cfg, h)
+	srv := server.New(cfg, h, registry)
 	go srv.Start()
 
-	// Wait for server to be ready
 	baseURL = fmt.Sprintf("http://127.0.0.1:%d", port)
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
@@ -71,7 +78,6 @@ func TestPublicChannelFlow(t *testing.T) {
 	baseURL, cleanup := startTestServer(t)
 	defer cleanup()
 
-	// Connect WebSocket client
 	wsURL := "ws" + baseURL[4:] + "/app/test-key"
 	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
@@ -143,12 +149,51 @@ func TestPublicChannelFlow(t *testing.T) {
 		t.Fatalf("expected channel test-channel, got %s", eventMsg.Channel)
 	}
 
-	// Verify data payload
 	var data map[string]string
 	if err := json.Unmarshal(eventMsg.Data, &data); err != nil {
 		t.Fatalf("failed to unmarshal event data: %v", err)
 	}
 	if data["message"] != "hello" {
 		t.Fatalf("expected message 'hello', got '%s'", data["message"])
+	}
+}
+
+func TestUnknownAppKeyRejected(t *testing.T) {
+	baseURL, cleanup := startTestServer(t)
+	defer cleanup()
+
+	wsURL := "ws" + baseURL[4:] + "/app/invalid-key"
+	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		// Connection refused is also acceptable
+		return
+	}
+	defer ws.Close()
+
+	// Should receive a close frame with code 4001
+	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, _, err = ws.ReadMessage()
+	if err == nil {
+		t.Fatal("expected connection to be closed")
+	}
+	closeErr, ok := err.(*websocket.CloseError)
+	if ok && closeErr.Code != 4001 {
+		t.Fatalf("expected close code 4001, got %d", closeErr.Code)
+	}
+}
+
+func TestUnknownAppIDRejected(t *testing.T) {
+	baseURL, cleanup := startTestServer(t)
+	defer cleanup()
+
+	req, _ := http.NewRequest("GET", baseURL+"/apps/unknown-app/channels", nil)
+	req.Header.Set("Authorization", "Bearer test-secret")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
 	}
 }
