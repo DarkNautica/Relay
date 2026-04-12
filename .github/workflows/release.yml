@@ -1,4 +1,4 @@
-# ─────────────���───────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────
 # Relay Server — Release Workflow
 #
 # Triggers on git tag push matching v* (e.g. v1.0.0).
@@ -8,7 +8,7 @@
 # Required GitHub Secrets:
 #   DOCKERHUB_USERNAME — Docker Hub username for pushing images
 #   DOCKERHUB_TOKEN    — Docker Hub access token (not password)
-# ───────────────────���───────────────────────��─────────────────────────
+# ────────────────────────────────────────────────────────────────────
 
 name: Release
 
@@ -27,6 +27,9 @@ jobs:
   build-binaries:
     name: Build Binaries
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: relay-server
     strategy:
       matrix:
         include:
@@ -67,7 +70,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: relay-${{ matrix.suffix }}
-          path: relay-${{ matrix.suffix }}
+          path: relay-server/relay-${{ matrix.suffix }}
 
   github-release:
     name: GitHub Release
@@ -109,7 +112,7 @@ jobs:
 
       - uses: docker/build-push-action@v5
         with:
-          context: .
+          context: relay-server
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
