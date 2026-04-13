@@ -186,7 +186,7 @@ func (c *Client) sendConnectionEstablished() error {
 		ActivityTimeout: c.cfg.PingInterval,
 	}
 
-	msg, err := protocol.NewMessage(protocol.EventConnectionEstablished, "", data)
+	msg, err := protocol.NewMessage(protocol.PusherEventConnectionEstablished, "", data)
 	if err != nil {
 		return err
 	}
