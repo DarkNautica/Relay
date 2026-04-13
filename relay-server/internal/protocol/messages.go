@@ -132,6 +132,7 @@ type PublishRequest struct {
 	Data     json.RawMessage `json:"data"`
 	SocketID string          `json:"socket_id,omitempty"` // Exclude this socket from receiving
 	AppID    string          `json:"-"`                   // Set by the API handler from the URL
+	EventID  string          `json:"-"`                   // Pre-assigned event ID (used by replay)
 }
 
 // BatchPublishRequest is the body for the HTTP batch publish API.

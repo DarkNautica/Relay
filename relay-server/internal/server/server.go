@@ -67,6 +67,10 @@ func (s *Server) buildRouter() http.Handler {
 	appsRouter := r.PathPrefix("/apps/{appId}").Subrouter()
 	appsRouter.HandleFunc("/events", rl(authMW(apiHandler.PublishEvent))).Methods(http.MethodPost)
 	appsRouter.HandleFunc("/events/batch", rl(authMW(apiHandler.PublishBatch))).Methods(http.MethodPost)
+	appsRouter.HandleFunc("/events/log", authMW(apiHandler.GetEventLog)).Methods(http.MethodGet)
+	appsRouter.HandleFunc("/events/{eventId}/replay", authMW(apiHandler.ReplayEvent)).Methods(http.MethodPost)
+	appsRouter.HandleFunc("/events/{eventId}", authMW(apiHandler.GetEventDetail)).Methods(http.MethodGet)
+	appsRouter.HandleFunc("/events", authMW(apiHandler.GetEvents)).Methods(http.MethodGet)
 	appsRouter.HandleFunc("/channels", authMW(apiHandler.GetChannels)).Methods(http.MethodGet)
 	appsRouter.HandleFunc("/channels/{channelName}", authMW(apiHandler.GetChannel)).Methods(http.MethodGet)
 	appsRouter.HandleFunc("/channels/{channelName}/users", authMW(apiHandler.GetChannelUsers)).Methods(http.MethodGet)
@@ -78,8 +82,8 @@ func (s *Server) buildRouter() http.Handler {
 	// Per-app stats (connection count, peak, messages)
 	appsRouter.HandleFunc("/stats", authMW(apiHandler.GetAppStats)).Methods(http.MethodGet)
 
-	// Event log for dashboard
-	appsRouter.HandleFunc("/events/log", authMW(apiHandler.GetEventLog)).Methods(http.MethodGet)
+	// Observability metrics
+	appsRouter.HandleFunc("/metrics", authMW(apiHandler.GetAppMetrics)).Methods(http.MethodGet)
 
 	// Stats endpoint (no auth)
 	r.HandleFunc("/stats", apiHandler.GetStats).Methods(http.MethodGet)

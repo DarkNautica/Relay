@@ -9,6 +9,7 @@ import (
 
 	"github.com/relayhq/relay-server/internal/apps"
 	"github.com/relayhq/relay-server/internal/config"
+	"github.com/relayhq/relay-server/internal/eventstore"
 	"github.com/relayhq/relay-server/internal/history"
 	"github.com/relayhq/relay-server/internal/hub"
 	"github.com/relayhq/relay-server/internal/server"
@@ -48,6 +49,7 @@ func main() {
 	h := hub.NewHub(cfg, registry)
 	h.History = history.NewStore(100)
 	h.Webhooks = webhook.NewDispatcher()
+	h.EventStore = eventstore.NewStore(1000)
 	go h.Run()
 
 	srv := server.New(cfg, h, registry)

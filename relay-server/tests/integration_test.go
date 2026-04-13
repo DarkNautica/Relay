@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/relayhq/relay-server/internal/apps"
 	"github.com/relayhq/relay-server/internal/config"
+	"github.com/relayhq/relay-server/internal/eventstore"
 	"github.com/relayhq/relay-server/internal/history"
 	"github.com/relayhq/relay-server/internal/hub"
 	"github.com/relayhq/relay-server/internal/protocol"
@@ -65,6 +66,7 @@ func startTestServerWithApps(t *testing.T, appList ...*apps.App) (baseURL string
 
 	h := hub.NewHub(cfg, registry)
 	h.History = history.NewStore(100)
+	h.EventStore = eventstore.NewStore(1000)
 	go h.Run()
 
 	srv := server.New(cfg, h, registry)
@@ -100,9 +102,9 @@ func dialAndWaitConnected(t *testing.T, wsURL string) *websocket.Conn {
 		ws.Close()
 		t.Fatalf("failed to read connection_established: %v", err)
 	}
-	if msg.Event != protocol.EventConnectionEstablished {
+	if msg.Event != protocol.PusherEventConnectionEstablished {
 		ws.Close()
-		t.Fatalf("expected %s, got %s", protocol.EventConnectionEstablished, msg.Event)
+		t.Fatalf("expected %s, got %s", protocol.PusherEventConnectionEstablished, msg.Event)
 	}
 	return ws
 }
@@ -515,5 +517,292 @@ func TestAppStatsRequiresAuth(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
+// --- Observability API Tests ---
+
+func TestEventsEndpoint(t *testing.T) {
+	baseURL, cleanup := startTestServer(t)
+	defer cleanup()
+
+	wsURL := "ws" + baseURL[4:] + "/app/test-key"
+	ws := dialAndWaitConnected(t, wsURL)
+	defer ws.Close()
+
+	// Subscribe
+	subPayload, _ := json.Marshal(protocol.SubscribeData{Channel: "obs-test"})
+	ws.WriteJSON(protocol.Message{Event: protocol.EventSubscribe, Data: subPayload})
+	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	ws.ReadJSON(&protocol.Message{}) // subscription_succeeded
+
+	// Publish events
+	for i := 0; i < 3; i++ {
+		publishBody, _ := json.Marshal(map[string]any{
+			"channel": "obs-test",
+			"event":   fmt.Sprintf("test-event-%d", i),
+			"data":    map[string]string{"index": fmt.Sprintf("%d", i)},
+		})
+		req, _ := http.NewRequest("POST", baseURL+"/apps/test-app/events", bytes.NewReader(publishBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer test-secret")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("publish failed: %v", err)
+		}
+		resp.Body.Close()
+	}
+
+	// Drain WebSocket messages
+	for i := 0; i < 3; i++ {
+		ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+		ws.ReadJSON(&protocol.Message{})
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// GET /apps/{appId}/events
+	req, _ := http.NewRequest("GET", baseURL+"/apps/test-app/events?limit=2", nil)
+	req.Header.Set("Authorization", "Bearer test-secret")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	events, ok := result["events"].([]any)
+	if !ok {
+		t.Fatal("expected events array")
+	}
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+
+	// Check event structure
+	first := events[0].(map[string]any)
+	if first["id"] == nil || first["id"] == "" {
+		t.Fatal("expected event to have an id")
+	}
+	if first["channel"] != "obs-test" {
+		t.Fatalf("expected channel obs-test, got %v", first["channel"])
+	}
+	if first["delivered_to"] == nil {
+		t.Fatal("expected delivered_to count")
+	}
+
+	// Should have a next_cursor
+	if result["next_cursor"] == nil {
+		t.Fatal("expected next_cursor")
+	}
+}
+
+func TestEventDetailEndpoint(t *testing.T) {
+	baseURL, cleanup := startTestServer(t)
+	defer cleanup()
+
+	wsURL := "ws" + baseURL[4:] + "/app/test-key"
+	ws := dialAndWaitConnected(t, wsURL)
+	defer ws.Close()
+
+	// Subscribe and publish
+	subPayload, _ := json.Marshal(protocol.SubscribeData{Channel: "detail-test"})
+	ws.WriteJSON(protocol.Message{Event: protocol.EventSubscribe, Data: subPayload})
+	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	ws.ReadJSON(&protocol.Message{}) // subscription_succeeded
+
+	publishBody, _ := json.Marshal(map[string]any{
+		"channel": "detail-test",
+		"event":   "detail-event",
+		"data":    map[string]string{"key": "value"},
+	})
+	req, _ := http.NewRequest("POST", baseURL+"/apps/test-app/events", bytes.NewReader(publishBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-secret")
+	http.DefaultClient.Do(req)
+
+	// Drain WS
+	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	ws.ReadJSON(&protocol.Message{})
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Get events list to find the event ID
+	req2, _ := http.NewRequest("GET", baseURL+"/apps/test-app/events?limit=1", nil)
+	req2.Header.Set("Authorization", "Bearer test-secret")
+	resp2, _ := http.DefaultClient.Do(req2)
+	var listResult map[string]any
+	json.NewDecoder(resp2.Body).Decode(&listResult)
+	resp2.Body.Close()
+
+	events := listResult["events"].([]any)
+	eventID := events[0].(map[string]any)["id"].(string)
+
+	// GET /apps/{appId}/events/{eventId}
+	req3, _ := http.NewRequest("GET", baseURL+"/apps/test-app/events/"+eventID, nil)
+	req3.Header.Set("Authorization", "Bearer test-secret")
+	resp3, err := http.DefaultClient.Do(req3)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp3.Body.Close()
+	if resp3.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp3.StatusCode)
+	}
+
+	var detail map[string]any
+	json.NewDecoder(resp3.Body).Decode(&detail)
+
+	if detail["id"] != eventID {
+		t.Fatalf("expected id %s, got %v", eventID, detail["id"])
+	}
+	if detail["channel"] != "detail-test" {
+		t.Fatalf("expected channel detail-test, got %v", detail["channel"])
+	}
+	deliveredTo, ok := detail["delivered_to"].([]any)
+	if !ok {
+		t.Fatal("expected delivered_to to be an array")
+	}
+	if len(deliveredTo) != 1 {
+		t.Fatalf("expected 1 delivery, got %d", len(deliveredTo))
+	}
+}
+
+func TestMetricsEndpoint(t *testing.T) {
+	baseURL, cleanup := startTestServer(t)
+	defer cleanup()
+
+	wsURL := "ws" + baseURL[4:] + "/app/test-key"
+	ws := dialAndWaitConnected(t, wsURL)
+	defer ws.Close()
+
+	// Subscribe and publish
+	subPayload, _ := json.Marshal(protocol.SubscribeData{Channel: "metrics-test"})
+	ws.WriteJSON(protocol.Message{Event: protocol.EventSubscribe, Data: subPayload})
+	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	ws.ReadJSON(&protocol.Message{}) // subscription_succeeded
+
+	for i := 0; i < 5; i++ {
+		publishBody, _ := json.Marshal(map[string]any{
+			"channel": "metrics-test",
+			"event":   "metric-event",
+			"data":    map[string]string{"i": fmt.Sprintf("%d", i)},
+		})
+		req, _ := http.NewRequest("POST", baseURL+"/apps/test-app/events", bytes.NewReader(publishBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer test-secret")
+		http.DefaultClient.Do(req)
+	}
+
+	// Drain WS
+	for i := 0; i < 5; i++ {
+		ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+		ws.ReadJSON(&protocol.Message{})
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// GET /apps/{appId}/metrics
+	req, _ := http.NewRequest("GET", baseURL+"/apps/test-app/metrics", nil)
+	req.Header.Set("Authorization", "Bearer test-secret")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var metrics map[string]any
+	json.NewDecoder(resp.Body).Decode(&metrics)
+
+	totalEvents := metrics["total_events"].(float64)
+	if totalEvents != 5 {
+		t.Fatalf("expected 5 total_events, got %v", totalEvents)
+	}
+
+	totalDeliveries := metrics["total_deliveries"].(float64)
+	if totalDeliveries != 5 {
+		t.Fatalf("expected 5 total_deliveries, got %v", totalDeliveries)
+	}
+}
+
+func TestReplayEndpoint(t *testing.T) {
+	baseURL, cleanup := startTestServer(t)
+	defer cleanup()
+
+	wsURL := "ws" + baseURL[4:] + "/app/test-key"
+	ws := dialAndWaitConnected(t, wsURL)
+	defer ws.Close()
+
+	// Subscribe and publish
+	subPayload, _ := json.Marshal(protocol.SubscribeData{Channel: "replay-test"})
+	ws.WriteJSON(protocol.Message{Event: protocol.EventSubscribe, Data: subPayload})
+	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	ws.ReadJSON(&protocol.Message{}) // subscription_succeeded
+
+	publishBody, _ := json.Marshal(map[string]any{
+		"channel": "replay-test",
+		"event":   "replay-event",
+		"data":    map[string]string{"msg": "original"},
+	})
+	req, _ := http.NewRequest("POST", baseURL+"/apps/test-app/events", bytes.NewReader(publishBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-secret")
+	http.DefaultClient.Do(req)
+
+	// Drain the original event
+	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	ws.ReadJSON(&protocol.Message{})
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Get the event ID
+	req2, _ := http.NewRequest("GET", baseURL+"/apps/test-app/events?limit=1", nil)
+	req2.Header.Set("Authorization", "Bearer test-secret")
+	resp2, _ := http.DefaultClient.Do(req2)
+	var listResult map[string]any
+	json.NewDecoder(resp2.Body).Decode(&listResult)
+	resp2.Body.Close()
+
+	events := listResult["events"].([]any)
+	eventID := events[0].(map[string]any)["id"].(string)
+
+	// POST /apps/{appId}/events/{eventId}/replay
+	req3, _ := http.NewRequest("POST", baseURL+"/apps/test-app/events/"+eventID+"/replay", nil)
+	req3.Header.Set("Authorization", "Bearer test-secret")
+	resp3, err := http.DefaultClient.Do(req3)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp3.Body.Close()
+	if resp3.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp3.StatusCode)
+	}
+
+	var replayResult map[string]any
+	json.NewDecoder(resp3.Body).Decode(&replayResult)
+
+	if replayResult["ok"] != true {
+		t.Fatalf("expected ok=true, got %v", replayResult["ok"])
+	}
+	if replayResult["new_event_id"] == nil || replayResult["new_event_id"] == "" {
+		t.Fatal("expected new_event_id")
+	}
+
+	// Should receive the replayed event on WebSocket
+	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var replayMsg protocol.Message
+	if err := ws.ReadJSON(&replayMsg); err != nil {
+		t.Fatalf("failed to receive replayed event: %v", err)
+	}
+	if replayMsg.Event != "replay-event" {
+		t.Fatalf("expected event replay-event, got %s", replayMsg.Event)
 	}
 }

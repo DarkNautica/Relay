@@ -77,21 +77,25 @@ func (ch *Channel) Unsubscribe(client *Client) *protocol.PresenceMember {
 
 // Broadcast sends a message to all subscribed clients.
 // If excludeSocketID is set, that client will not receive the message.
-func (ch *Channel) Broadcast(msg *protocol.Message, excludeSocketID string) {
+// Returns the list of socket IDs that received the message.
+func (ch *Channel) Broadcast(msg *protocol.Message, excludeSocketID string) []string {
 	ch.mu.RLock()
 	defer ch.mu.RUnlock()
 
 	data, err := msg.Encode()
 	if err != nil {
-		return
+		return nil
 	}
 
+	recipients := make([]string, 0, len(ch.clients))
 	for client := range ch.clients {
 		if excludeSocketID != "" && client.SocketID == excludeSocketID {
 			continue
 		}
 		client.SendRaw(data)
+		recipients = append(recipients, client.SocketID)
 	}
+	return recipients
 }
 
 // ClientCount returns the number of subscribed clients.

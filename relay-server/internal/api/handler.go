@@ -12,6 +12,7 @@ import (
 	"github.com/relayhq/relay-server/internal/apps"
 	"github.com/relayhq/relay-server/internal/auth"
 	"github.com/relayhq/relay-server/internal/config"
+	"github.com/relayhq/relay-server/internal/eventstore"
 	"github.com/relayhq/relay-server/internal/history"
 	"github.com/relayhq/relay-server/internal/hub"
 	"github.com/relayhq/relay-server/internal/protocol"
@@ -272,6 +273,141 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 		"channels":    h.hub.ChannelCount(),
 		"apps":        h.hub.AppStats(),
 	})
+}
+
+// --- Observability Endpoints ---
+
+// GetEvents handles GET /apps/{appId}/events
+// Returns recent events for an app with optional channel filter and cursor pagination.
+func (h *Handler) GetEvents(w http.ResponseWriter, r *http.Request) {
+	appID := mux.Vars(r)["appId"]
+
+	if h.hub.EventStore == nil {
+		jsonOK(w, map[string]any{"events": []any{}, "next_cursor": nil})
+		return
+	}
+
+	limit := 25
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	// Decode cursor to beforeID
+	beforeID := ""
+	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
+		beforeID = eventstore.DecodeCursor(cursor)
+	}
+
+	var events []eventstore.StoredEvent
+	if channel := r.URL.Query().Get("channel"); channel != "" {
+		events = h.hub.EventStore.GetByChannel(appID, channel, limit)
+	} else {
+		events = h.hub.EventStore.Get(appID, limit, beforeID)
+	}
+	if events == nil {
+		events = []eventstore.StoredEvent{}
+	}
+
+	// Build response
+	items := make([]map[string]any, len(events))
+	for i, e := range events {
+		items[i] = map[string]any{
+			"id":           e.ID,
+			"channel":      e.Channel,
+			"event":        e.EventName,
+			"data":         e.Data,
+			"socket_id":    e.SocketID,
+			"published_at": e.PublishedAt.UTC().Format(time.RFC3339),
+			"delivered_to": len(e.DeliveredTo),
+			"delivery_ms":  e.DeliveryMs,
+		}
+	}
+
+	var nextCursor any
+	if len(events) == limit && len(events) > 0 {
+		nextCursor = eventstore.EncodeCursor(events[len(events)-1].ID)
+	}
+
+	jsonOK(w, map[string]any{"events": items, "next_cursor": nextCursor})
+}
+
+// GetEventDetail handles GET /apps/{appId}/events/{eventId}
+// Returns a single event with full delivery details.
+func (h *Handler) GetEventDetail(w http.ResponseWriter, r *http.Request) {
+	appID := mux.Vars(r)["appId"]
+	eventID := mux.Vars(r)["eventId"]
+
+	if h.hub.EventStore == nil {
+		jsonError(w, http.StatusNotFound, "Event not found")
+		return
+	}
+
+	event := h.hub.EventStore.GetByID(appID, eventID)
+	if event == nil {
+		jsonError(w, http.StatusNotFound, "Event not found")
+		return
+	}
+
+	jsonOK(w, map[string]any{
+		"id":           event.ID,
+		"channel":      event.Channel,
+		"event":        event.EventName,
+		"data":         event.Data,
+		"published_at": event.PublishedAt.UTC().Format(time.RFC3339),
+		"delivered_to": event.DeliveredTo,
+		"delivery_ms":  event.DeliveryMs,
+	})
+}
+
+// ReplayEvent handles POST /apps/{appId}/events/{eventId}/replay
+// Re-publishes a historical event to its original channel.
+func (h *Handler) ReplayEvent(w http.ResponseWriter, r *http.Request) {
+	appID := mux.Vars(r)["appId"]
+	eventID := mux.Vars(r)["eventId"]
+
+	if h.hub.EventStore == nil {
+		jsonError(w, http.StatusNotFound, "Event not found")
+		return
+	}
+
+	event := h.hub.EventStore.GetByID(appID, eventID)
+	if event == nil {
+		jsonError(w, http.StatusNotFound, "Event not found")
+		return
+	}
+
+	// Generate new event ID for the replayed event
+	newEventID := eventstore.GenerateEventID()
+
+	// Re-publish via the hub with the pre-assigned ID
+	h.hub.PublishEvent(&protocol.PublishRequest{
+		AppID:   appID,
+		Channel: event.Channel,
+		Event:   event.EventName,
+		Data:    json.RawMessage(event.Data),
+		EventID: newEventID,
+	})
+
+	jsonOK(w, map[string]any{"ok": true, "new_event_id": newEventID})
+}
+
+// GetAppMetrics handles GET /apps/{appId}/metrics
+// Returns aggregate metrics for an app.
+func (h *Handler) GetAppMetrics(w http.ResponseWriter, r *http.Request) {
+	appID := mux.Vars(r)["appId"]
+
+	if h.hub.EventStore == nil {
+		jsonOK(w, eventstore.AppMetrics{})
+		return
+	}
+
+	metrics := h.hub.EventStore.GetMetrics(appID)
+	jsonOK(w, metrics)
 }
 
 // --- JSON helpers ---

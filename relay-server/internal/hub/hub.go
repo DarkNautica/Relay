@@ -11,6 +11,7 @@ import (
 	"github.com/relayhq/relay-server/internal/apps"
 	"github.com/relayhq/relay-server/internal/auth"
 	"github.com/relayhq/relay-server/internal/config"
+	"github.com/relayhq/relay-server/internal/eventstore"
 	"github.com/relayhq/relay-server/internal/history"
 	"github.com/relayhq/relay-server/internal/protocol"
 	"github.com/relayhq/relay-server/internal/webhook"
@@ -58,6 +59,9 @@ type Hub struct {
 
 	// Webhook dispatcher
 	Webhooks *webhook.Dispatcher
+
+	// Event store for observability tracking
+	EventStore *eventstore.Store
 
 	// Per-app connection counts for limit enforcement.
 	// Atomic counters allow the WebSocket handler to check limits
@@ -456,7 +460,32 @@ func (h *Hub) handleClientEvent(client *Client, msg *protocol.Message) {
 		return
 	}
 
-	ch.Broadcast(msg, client.SocketID)
+	// Record client event in the event store before delivery
+	var eventID string
+	publishTime := time.Now()
+	if h.EventStore != nil && isTrackableEvent(msg.Event) {
+		eventID = eventstore.GenerateEventID()
+		h.EventStore.Add(eventstore.StoredEvent{
+			ID:          eventID,
+			AppID:       client.app.ID,
+			Channel:     msg.Channel,
+			EventName:   msg.Event,
+			Data:        string(msg.Data),
+			SocketID:    client.SocketID,
+			PublishedAt: publishTime,
+			DeliveredTo: []string{},
+		})
+	}
+
+	recipients := ch.Broadcast(msg, client.SocketID)
+
+	// Record deliveries
+	if h.EventStore != nil && eventID != "" {
+		latencyMs := time.Since(publishTime).Milliseconds()
+		for _, socketID := range recipients {
+			h.EventStore.RecordDelivery(client.app.ID, eventID, socketID, latencyMs)
+		}
+	}
 }
 
 func (h *Hub) handlePublish(req *protocol.PublishRequest) {
@@ -475,7 +504,35 @@ func (h *Hub) handlePublish(req *protocol.PublishRequest) {
 		Data:    req.Data,
 	}
 
-	ch.Broadcast(msg, req.SocketID)
+	// Record event in the event store before delivery (skip internal protocol events)
+	var eventID string
+	publishTime := time.Now()
+	if h.EventStore != nil && isTrackableEvent(req.Event) {
+		eventID = req.EventID
+		if eventID == "" {
+			eventID = eventstore.GenerateEventID()
+		}
+		h.EventStore.Add(eventstore.StoredEvent{
+			ID:          eventID,
+			AppID:       req.AppID,
+			Channel:     req.Channel,
+			EventName:   req.Event,
+			Data:        string(req.Data),
+			SocketID:    req.SocketID,
+			PublishedAt: publishTime,
+			DeliveredTo: []string{},
+		})
+	}
+
+	recipients := ch.Broadcast(msg, req.SocketID)
+
+	// Record deliveries
+	if h.EventStore != nil && eventID != "" {
+		latencyMs := time.Since(publishTime).Milliseconds()
+		for _, socketID := range recipients {
+			h.EventStore.RecordDelivery(req.AppID, eventID, socketID, latencyMs)
+		}
+	}
 
 	// Increment per-app message counter
 	h.IncrementMsgCount(req.AppID)
@@ -491,7 +548,7 @@ func (h *Hub) handlePublish(req *protocol.PublishRequest) {
 	// Record to event log ring buffer
 	h.mu.Lock()
 	h.eventLog[h.eventLogPos] = EventLogEntry{
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Timestamp: publishTime.UTC().Format(time.RFC3339),
 		Channel:   req.Channel,
 		Event:     req.Event,
 		AppID:     req.AppID,
@@ -505,7 +562,8 @@ func (h *Hub) handlePublish(req *protocol.PublishRequest) {
 	slog.Debug("published event",
 		"event", req.Event,
 		"channel", req.Channel,
-		"app_id", req.AppID)
+		"app_id", req.AppID,
+		"event_id", eventID)
 }
 
 // --- Presence Helpers ---
@@ -532,6 +590,20 @@ func (h *Hub) fireWebhook(app *apps.App, event, channel string, extra map[string
 	if h.Webhooks != nil {
 		go h.Webhooks.Fire(app, event, channel, extra)
 	}
+}
+
+// --- Event Tracking ---
+
+// isTrackableEvent returns true if the event should be recorded in the event store.
+// Internal protocol events (pusher:* and relay:*) are excluded.
+func isTrackableEvent(eventName string) bool {
+	if strings.HasPrefix(eventName, "pusher:") || strings.HasPrefix(eventName, "pusher_internal:") {
+		return false
+	}
+	if strings.HasPrefix(eventName, "relay:") {
+		return false
+	}
+	return true
 }
 
 // --- Auth Validation ---
@@ -675,6 +747,12 @@ func (h *Hub) GetEventLog(n int, appID string) []EventLogEntry {
 		}
 	}
 	return result
+}
+
+// PublishEvent queues a publish request into the hub's event loop.
+// Used by the API handler for event replay.
+func (h *Hub) PublishEvent(req *protocol.PublishRequest) {
+	h.Publish <- req
 }
 
 // Shutdown broadcasts a shutdown error to all connected clients,
