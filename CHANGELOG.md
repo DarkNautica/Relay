@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `GET /apps/{appId}/channels` now returns a map format with `subscription_count` and `user_count` (presence channels) for the Channel Inspector UI
+- `GET /apps/{appId}/channels/{channelName}/events` now supports cursor-based pagination (`?limit=N&cursor=OPAQUE`), returns `socket_id` per event and `next_cursor` for paging
+- `GET /apps/{appId}/stats` — new authenticated endpoint returning per-app `connections`, `peak_connections`, and `messages_count`
+- Per-app peak connection tracking (high-water mark)
+- Per-app message counter
+- Integration tests for channels map format, channel events pagination, and per-app stats
+
 ## [0.2.0] - 2026-04-12
 
 ### Added

@@ -139,7 +139,8 @@ func (ch *Channel) GetMembers() map[string]*protocol.PresenceMember {
 type ChannelInfo struct {
 	Name            string `json:"name"`
 	Type            string `json:"type"`
-	SubscriberCount int    `json:"subscriber_count"`
+	SubscriberCount int    `json:"subscription_count"`
+	UserCount       int    `json:"user_count,omitempty"`
 	Occupied        bool   `json:"occupied"`
 	AppID           string `json:"app_id,omitempty"`
 }
@@ -147,10 +148,14 @@ type ChannelInfo struct {
 func (ch *Channel) Info() ChannelInfo {
 	ch.mu.RLock()
 	defer ch.mu.RUnlock()
-	return ChannelInfo{
+	info := ChannelInfo{
 		Name:            ch.Name,
 		Type:            ch.Type.String(),
 		SubscriberCount: len(ch.clients),
 		Occupied:        len(ch.clients) > 0,
 	}
+	if ch.Type == protocol.ChannelTypePresence {
+		info.UserCount = len(ch.members)
+	}
+	return info
 }

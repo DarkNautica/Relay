@@ -64,6 +64,14 @@ type Hub struct {
 	// without going through the single-threaded event loop.
 	appConnMu     sync.Mutex
 	appConnCounts map[string]*atomic.Int64
+
+	// Per-app peak connections (high-water mark)
+	appPeakMu     sync.Mutex
+	appPeakConns  map[string]*atomic.Int64
+
+	// Per-app message counters (total messages since startup)
+	appMsgMu     sync.Mutex
+	appMsgCounts map[string]*atomic.Int64
 }
 
 // EventLogEntry records a published event for the dashboard.
@@ -91,6 +99,8 @@ func NewHub(cfg *config.Config, registry *apps.AppRegistry) *Hub {
 		incoming:      make(chan *incomingMessage, 1024),
 		Publish:       make(chan *protocol.PublishRequest, 1024),
 		appConnCounts: make(map[string]*atomic.Int64),
+		appPeakConns:  make(map[string]*atomic.Int64),
+		appMsgCounts:  make(map[string]*atomic.Int64),
 	}
 }
 
@@ -120,9 +130,60 @@ func (h *Hub) TryIncrementConns(appID string, maxConns int) (int64, bool) {
 			return current, false
 		}
 		if counter.CompareAndSwap(current, current+1) {
-			return current + 1, true
+			newCount := current + 1
+			// Update peak connection high-water mark
+			peak := h.getAppPeak(appID)
+			for {
+				curPeak := peak.Load()
+				if newCount <= curPeak {
+					break
+				}
+				if peak.CompareAndSwap(curPeak, newCount) {
+					break
+				}
+			}
+			return newCount, true
 		}
 	}
+}
+
+// getAppPeak returns the peak connection counter for an app.
+func (h *Hub) getAppPeak(appID string) *atomic.Int64 {
+	h.appPeakMu.Lock()
+	peak, ok := h.appPeakConns[appID]
+	if !ok {
+		peak = &atomic.Int64{}
+		h.appPeakConns[appID] = peak
+	}
+	h.appPeakMu.Unlock()
+	return peak
+}
+
+// AppPeakConnCount returns the peak connection count for an app.
+func (h *Hub) AppPeakConnCount(appID string) int64 {
+	return h.getAppPeak(appID).Load()
+}
+
+// getAppMsgCounter returns the message counter for an app.
+func (h *Hub) getAppMsgCounter(appID string) *atomic.Int64 {
+	h.appMsgMu.Lock()
+	counter, ok := h.appMsgCounts[appID]
+	if !ok {
+		counter = &atomic.Int64{}
+		h.appMsgCounts[appID] = counter
+	}
+	h.appMsgMu.Unlock()
+	return counter
+}
+
+// IncrementMsgCount increments the message counter for an app.
+func (h *Hub) IncrementMsgCount(appID string) {
+	h.getAppMsgCounter(appID).Add(1)
+}
+
+// AppMsgCount returns the total message count for an app since startup.
+func (h *Hub) AppMsgCount(appID string) int64 {
+	return h.getAppMsgCounter(appID).Load()
 }
 
 // DecrementConns decrements the per-app connection counter.
@@ -416,11 +477,14 @@ func (h *Hub) handlePublish(req *protocol.PublishRequest) {
 
 	ch.Broadcast(msg, req.SocketID)
 
+	// Increment per-app message counter
+	h.IncrementMsgCount(req.AppID)
+
 	// Record to history if enabled for this app
 	if h.History != nil {
 		app, ok := h.registry.LookupByID(req.AppID)
 		if ok && app.History {
-			h.History.Record(req.AppID, req.Channel, req.Event, req.Data, app.HistoryLimit)
+			h.History.Record(req.AppID, req.Channel, req.Event, req.Data, req.SocketID, app.HistoryLimit)
 		}
 	}
 

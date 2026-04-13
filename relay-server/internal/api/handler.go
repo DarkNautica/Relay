@@ -108,10 +108,23 @@ func (h *Handler) PublishBatch(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetChannels handles GET /apps/{appId}/channels
+// Returns a map of channel names to channel info, suitable for the Channel Inspector UI.
 func (h *Handler) GetChannels(w http.ResponseWriter, r *http.Request) {
 	appID := mux.Vars(r)["appId"]
 	channels := h.hub.GetChannels(appID)
-	jsonOK(w, map[string]any{"channels": channels})
+
+	channelMap := make(map[string]any, len(channels))
+	for _, ch := range channels {
+		entry := map[string]any{
+			"type":               ch.Type,
+			"subscription_count": ch.SubscriberCount,
+		}
+		if ch.Type == "presence" {
+			entry["user_count"] = ch.UserCount
+		}
+		channelMap[ch.Name] = entry
+	}
+	jsonOK(w, map[string]any{"channels": channelMap})
 }
 
 // GetAllChannels handles GET /dashboard/api/channels (no auth, all apps).
@@ -183,27 +196,49 @@ func (h *Handler) AuthChannel(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetChannelEvents handles GET /apps/{appId}/channels/{channelName}/events
+// Supports cursor-based pagination via ?limit=N&cursor=OPAQUE_CURSOR
 func (h *Handler) GetChannelEvents(w http.ResponseWriter, r *http.Request) {
 	appID := mux.Vars(r)["appId"]
 	channelName := mux.Vars(r)["channelName"]
 
-	limit := 50
+	limit := 25
 	if l := r.URL.Query().Get("limit"); l != "" {
 		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
 			limit = parsed
 		}
 	}
+	if limit > 100 {
+		limit = 100
+	}
 
 	if h.hub.History == nil {
-		jsonOK(w, map[string]any{"events": []any{}})
+		jsonOK(w, map[string]any{"events": []any{}, "next_cursor": nil})
 		return
 	}
 
-	events := h.hub.History.GetNewest(appID, channelName, limit)
+	var events []history.Event
+	cursor := r.URL.Query().Get("cursor")
+	if cursor != "" {
+		beforeID := history.DecodeCursor(cursor)
+		if beforeID > 0 {
+			events = h.hub.History.GetBeforeID(appID, channelName, beforeID, limit)
+		}
+	}
+	if events == nil {
+		events = h.hub.History.GetNewest(appID, channelName, limit)
+	}
 	if events == nil {
 		events = make([]history.Event, 0)
 	}
-	jsonOK(w, map[string]any{"events": events})
+
+	// Build next_cursor from the oldest event in the result set
+	var nextCursor any
+	if len(events) == limit && len(events) > 0 {
+		oldestID := events[len(events)-1].ID
+		nextCursor = history.EncodeCursor(oldestID)
+	}
+
+	jsonOK(w, map[string]any{"events": events, "next_cursor": nextCursor})
 }
 
 // GetEventLog handles GET /apps/{appId}/events/log
@@ -219,7 +254,18 @@ func (h *Handler) GetAllEvents(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]any{"events": events})
 }
 
-// GetStats handles GET /stats
+// GetAppStats handles GET /apps/{appId}/stats
+// Returns per-app connection count, peak connections, and message count.
+func (h *Handler) GetAppStats(w http.ResponseWriter, r *http.Request) {
+	appID := mux.Vars(r)["appId"]
+	jsonOK(w, map[string]any{
+		"connections":      h.hub.AppConnCount(appID),
+		"peak_connections": h.hub.AppPeakConnCount(appID),
+		"messages_count":   h.hub.AppMsgCount(appID),
+	})
+}
+
+// GetStats handles GET /stats (global, no auth)
 func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]any{
 		"connections": h.hub.ConnectionCount(),

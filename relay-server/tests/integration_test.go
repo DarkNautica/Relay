@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/relayhq/relay-server/internal/apps"
 	"github.com/relayhq/relay-server/internal/config"
+	"github.com/relayhq/relay-server/internal/history"
 	"github.com/relayhq/relay-server/internal/hub"
 	"github.com/relayhq/relay-server/internal/protocol"
 	"github.com/relayhq/relay-server/internal/server"
@@ -25,6 +26,8 @@ func startTestServer(t *testing.T) (baseURL string, cleanup func()) {
 		Key:            "test-key",
 		Secret:         "test-secret",
 		MaxConnections: 100,
+		History:        true,
+		HistoryLimit:   100,
 	})
 }
 
@@ -61,6 +64,7 @@ func startTestServerWithApps(t *testing.T, appList ...*apps.App) (baseURL string
 	}
 
 	h := hub.NewHub(cfg, registry)
+	h.History = history.NewStore(100)
 	go h.Run()
 
 	srv := server.New(cfg, h, registry)
@@ -305,5 +309,211 @@ func TestConnectionLimitUnlimited(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		ws := dialAndWaitConnected(t, wsURL)
 		defer ws.Close()
+	}
+}
+
+// --- Channel Inspector API Tests ---
+
+func TestChannelsEndpointMapFormat(t *testing.T) {
+	baseURL, cleanup := startTestServer(t)
+	defer cleanup()
+
+	wsURL := "ws" + baseURL[4:] + "/app/test-key"
+
+	// Connect and subscribe to a channel
+	ws := dialAndWaitConnected(t, wsURL)
+	defer ws.Close()
+
+	subPayload, _ := json.Marshal(protocol.SubscribeData{Channel: "test-channel"})
+	ws.WriteJSON(protocol.Message{Event: protocol.EventSubscribe, Data: subPayload})
+	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	ws.ReadJSON(&protocol.Message{}) // subscription_succeeded
+
+	// Query channels API
+	req, _ := http.NewRequest("GET", baseURL+"/apps/test-app/channels", nil)
+	req.Header.Set("Authorization", "Bearer test-secret")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	channels, ok := result["channels"].(map[string]any)
+	if !ok {
+		t.Fatal("expected channels to be a map")
+	}
+
+	ch, ok := channels["test-channel"].(map[string]any)
+	if !ok {
+		t.Fatal("expected test-channel in channels map")
+	}
+
+	if ch["type"] != "public" {
+		t.Fatalf("expected type public, got %v", ch["type"])
+	}
+	if ch["subscription_count"] != float64(1) {
+		t.Fatalf("expected subscription_count 1, got %v", ch["subscription_count"])
+	}
+}
+
+func TestChannelsEndpointEmpty(t *testing.T) {
+	baseURL, cleanup := startTestServer(t)
+	defer cleanup()
+
+	req, _ := http.NewRequest("GET", baseURL+"/apps/test-app/channels", nil)
+	req.Header.Set("Authorization", "Bearer test-secret")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	channels, ok := result["channels"].(map[string]any)
+	if !ok {
+		t.Fatal("expected channels to be a map")
+	}
+	if len(channels) != 0 {
+		t.Fatalf("expected empty channels map, got %d entries", len(channels))
+	}
+}
+
+func TestChannelEventsEndpoint(t *testing.T) {
+	baseURL, cleanup := startTestServer(t)
+	defer cleanup()
+
+	wsURL := "ws" + baseURL[4:] + "/app/test-key"
+	ws := dialAndWaitConnected(t, wsURL)
+	defer ws.Close()
+
+	// Subscribe
+	subPayload, _ := json.Marshal(protocol.SubscribeData{Channel: "events-test"})
+	ws.WriteJSON(protocol.Message{Event: protocol.EventSubscribe, Data: subPayload})
+	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	ws.ReadJSON(&protocol.Message{}) // subscription_succeeded
+
+	// Publish 3 events
+	for i := 0; i < 3; i++ {
+		publishBody, _ := json.Marshal(map[string]any{
+			"channel": "events-test",
+			"event":   fmt.Sprintf("event-%d", i),
+			"data":    map[string]string{"index": fmt.Sprintf("%d", i)},
+		})
+		req, _ := http.NewRequest("POST", baseURL+"/apps/test-app/events", bytes.NewReader(publishBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer test-secret")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("publish failed: %v", err)
+		}
+		resp.Body.Close()
+	}
+
+	// Give the hub time to process events and record history
+	time.Sleep(100 * time.Millisecond)
+
+	// Query channel events
+	req, _ := http.NewRequest("GET", baseURL+"/apps/test-app/channels/events-test/events?limit=2", nil)
+	req.Header.Set("Authorization", "Bearer test-secret")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	events, ok := result["events"].([]any)
+	if !ok {
+		t.Fatal("expected events array")
+	}
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+
+	// Should have a next_cursor since we limited to 2 and there are 3
+	if result["next_cursor"] == nil {
+		t.Fatal("expected next_cursor to be non-nil")
+	}
+
+	// Use cursor to get the next page
+	cursor := result["next_cursor"].(string)
+	req2, _ := http.NewRequest("GET", baseURL+"/apps/test-app/channels/events-test/events?limit=10&cursor="+cursor, nil)
+	req2.Header.Set("Authorization", "Bearer test-secret")
+	resp2, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp2.Body.Close()
+
+	var result2 map[string]any
+	json.NewDecoder(resp2.Body).Decode(&result2)
+
+	events2, ok := result2["events"].([]any)
+	if !ok {
+		t.Fatal("expected events array")
+	}
+	if len(events2) != 1 {
+		t.Fatalf("expected 1 event on page 2, got %d", len(events2))
+	}
+}
+
+func TestAppStatsEndpoint(t *testing.T) {
+	baseURL, cleanup := startTestServer(t)
+	defer cleanup()
+
+	// Connect a client
+	wsURL := "ws" + baseURL[4:] + "/app/test-key"
+	ws := dialAndWaitConnected(t, wsURL)
+	defer ws.Close()
+
+	// Query per-app stats
+	req, _ := http.NewRequest("GET", baseURL+"/apps/test-app/stats", nil)
+	req.Header.Set("Authorization", "Bearer test-secret")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result map[string]any
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	conns := result["connections"].(float64)
+	if conns != 1 {
+		t.Fatalf("expected 1 connection, got %v", conns)
+	}
+
+	peak := result["peak_connections"].(float64)
+	if peak < 1 {
+		t.Fatalf("expected peak >= 1, got %v", peak)
+	}
+}
+
+func TestAppStatsRequiresAuth(t *testing.T) {
+	baseURL, cleanup := startTestServer(t)
+	defer cleanup()
+
+	// No auth header
+	req, _ := http.NewRequest("GET", baseURL+"/apps/test-app/stats", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
 	}
 }

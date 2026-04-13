@@ -1,7 +1,10 @@
 package history
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,6 +17,7 @@ type Event struct {
 	Channel   string          `json:"channel"`
 	EventName string          `json:"event"`
 	Data      json.RawMessage `json:"data"`
+	SocketID  string          `json:"socket_id,omitempty"`
 }
 
 // channelBuffer is a ring buffer of events for one channel.
@@ -66,6 +70,19 @@ func (b *channelBuffer) afterID(afterID int64, limit int) []Event {
 		all = all[len(all)-limit:]
 	}
 	return all
+}
+
+// beforeID returns up to limit events with ID < beforeID, newest-first.
+func (b *channelBuffer) beforeID(beforeID int64, limit int) []Event {
+	result := make([]Event, 0, limit)
+	for i := 0; i < b.len && len(result) < limit; i++ {
+		idx := (b.pos - 1 - i + b.cap) % b.cap
+		e := b.events[idx]
+		if e.ID > 0 && e.ID < beforeID {
+			result = append(result, e)
+		}
+	}
+	return result
 }
 
 // expireBefore removes entries older than the given time.
@@ -122,7 +139,7 @@ func bufferKey(appID, channel string) string {
 }
 
 // Record stores an event and returns its sequential ID.
-func (s *Store) Record(appID, channel, eventName string, data json.RawMessage, limit int) int64 {
+func (s *Store) Record(appID, channel, eventName string, data json.RawMessage, socketID string, limit int) int64 {
 	id := s.nextID.Add(1)
 	e := Event{
 		ID:        id,
@@ -130,6 +147,7 @@ func (s *Store) Record(appID, channel, eventName string, data json.RawMessage, l
 		Channel:   channel,
 		EventName: eventName,
 		Data:      data,
+		SocketID:  socketID,
 	}
 
 	key := bufferKey(appID, channel)
@@ -171,6 +189,38 @@ func (s *Store) GetAfterID(appID, channel string, afterID int64, limit int) []Ev
 		return nil
 	}
 	return buf.afterID(afterID, limit)
+}
+
+// GetBeforeID returns up to limit events with ID < beforeID, newest-first.
+// Used for cursor-based pagination.
+func (s *Store) GetBeforeID(appID, channel string, beforeID int64, limit int) []Event {
+	key := bufferKey(appID, channel)
+	s.mu.RLock()
+	buf, ok := s.buffers[key]
+	s.mu.RUnlock()
+	if !ok {
+		return nil
+	}
+	return buf.beforeID(beforeID, limit)
+}
+
+// EncodeCursor encodes an event ID as an opaque pagination cursor.
+func EncodeCursor(eventID int64) string {
+	return base64.URLEncoding.EncodeToString([]byte(fmt.Sprintf("%d", eventID)))
+}
+
+// DecodeCursor decodes a pagination cursor back to an event ID.
+// Returns 0 if the cursor is invalid.
+func DecodeCursor(cursor string) int64 {
+	raw, err := base64.URLEncoding.DecodeString(cursor)
+	if err != nil {
+		return 0
+	}
+	id, err := strconv.ParseInt(string(raw), 10, 64)
+	if err != nil {
+		return 0
+	}
+	return id
 }
 
 // cleanup expires entries older than 1 hour every minute.

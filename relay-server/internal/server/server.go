@@ -75,6 +75,9 @@ func (s *Server) buildRouter() http.Handler {
 	// Auth endpoint — no Bearer auth
 	appsRouter.HandleFunc("/auth", apiHandler.AuthChannel).Methods(http.MethodPost)
 
+	// Per-app stats (connection count, peak, messages)
+	appsRouter.HandleFunc("/stats", authMW(apiHandler.GetAppStats)).Methods(http.MethodGet)
+
 	// Event log for dashboard
 	appsRouter.HandleFunc("/events/log", authMW(apiHandler.GetEventLog)).Methods(http.MethodGet)
 
