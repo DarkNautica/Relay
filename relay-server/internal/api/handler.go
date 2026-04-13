@@ -317,14 +317,14 @@ func (h *Handler) GetEvents(w http.ResponseWriter, r *http.Request) {
 	items := make([]map[string]any, len(events))
 	for i, e := range events {
 		items[i] = map[string]any{
-			"id":           e.ID,
-			"channel":      e.Channel,
-			"event":        e.EventName,
-			"data":         e.Data,
-			"socket_id":    e.SocketID,
-			"published_at": e.PublishedAt.UTC().Format(time.RFC3339),
-			"delivered_to": len(e.DeliveredTo),
-			"delivery_ms":  e.DeliveryMs,
+			"id":              e.ID,
+			"channel":         e.Channel,
+			"event":           e.EventName,
+			"data":            e.Data,
+			"socket_id":       e.SocketID,
+			"published_at":    e.PublishedAt.UTC().Format(time.RFC3339),
+			"delivered_count": len(e.DeliveredTo),
+			"delivery_ms":     e.DeliveryMs,
 		}
 	}
 

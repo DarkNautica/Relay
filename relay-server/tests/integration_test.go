@@ -592,8 +592,8 @@ func TestEventsEndpoint(t *testing.T) {
 	if first["channel"] != "obs-test" {
 		t.Fatalf("expected channel obs-test, got %v", first["channel"])
 	}
-	if first["delivered_to"] == nil {
-		t.Fatal("expected delivered_to count")
+	if first["delivered_count"] == nil {
+		t.Fatal("expected delivered_count")
 	}
 
 	// Should have a next_cursor
