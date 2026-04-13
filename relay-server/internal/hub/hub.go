@@ -489,22 +489,7 @@ func (h *Hub) handleClientEvent(client *Client, msg *protocol.Message) {
 }
 
 func (h *Hub) handlePublish(req *protocol.PublishRequest) {
-	key := channelKey(req.AppID, req.Channel)
-	h.mu.RLock()
-	ch, ok := h.channels[key]
-	h.mu.RUnlock()
-
-	if !ok {
-		return
-	}
-
-	msg := &protocol.Message{
-		Event:   req.Event,
-		Channel: req.Channel,
-		Data:    req.Data,
-	}
-
-	// Record event in the event store before delivery (skip internal protocol events)
+	// Record event in the event store before channel lookup (skip internal protocol events)
 	var eventID string
 	publishTime := time.Now()
 	if h.EventStore != nil && isTrackableEvent(req.Event) {
@@ -522,6 +507,23 @@ func (h *Hub) handlePublish(req *protocol.PublishRequest) {
 			PublishedAt: publishTime,
 			DeliveredTo: []string{},
 		})
+	}
+
+	key := channelKey(req.AppID, req.Channel)
+	h.mu.RLock()
+	ch, ok := h.channels[key]
+	h.mu.RUnlock()
+
+	if !ok {
+		// Increment per-app message counter even with no subscribers
+		h.IncrementMsgCount(req.AppID)
+		return
+	}
+
+	msg := &protocol.Message{
+		Event:   req.Event,
+		Channel: req.Channel,
+		Data:    req.Data,
 	}
 
 	recipients := ch.Broadcast(msg, req.SocketID)
