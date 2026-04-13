@@ -6,7 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -66,12 +66,12 @@ func (d *Dispatcher) Fire(app *apps.App, event, channel string, extra map[string
 		if !matchesEvent(wh.Events, event) {
 			continue
 		}
-		go d.send(wh.URL, body, sig)
+		go d.send(wh.URL, body, sig, app.ID)
 	}
 }
 
 // send delivers a webhook with up to 3 retries and exponential backoff.
-func (d *Dispatcher) send(url string, body []byte, signature string) {
+func (d *Dispatcher) send(url string, body []byte, signature, appID string) {
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
 			time.Sleep(time.Duration(1<<uint(attempt)) * time.Second)
@@ -79,7 +79,9 @@ func (d *Dispatcher) send(url string, body []byte, signature string) {
 
 		req, err := http.NewRequest("POST", url, bytes.NewReader(body))
 		if err != nil {
-			log.Printf("[Relay] Webhook request error: %v", err)
+			slog.Error("webhook request error",
+				"app_id", appID,
+				"error", err.Error())
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
@@ -87,16 +89,25 @@ func (d *Dispatcher) send(url string, body []byte, signature string) {
 
 		resp, err := d.client.Do(req)
 		if err != nil {
-			log.Printf("[Relay] Webhook delivery failed (attempt %d): %v", attempt+1, err)
+			slog.Warn("webhook delivery failed",
+				"app_id", appID,
+				"attempt", attempt+1,
+				"error", err.Error())
 			continue
 		}
 		resp.Body.Close()
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			return
 		}
-		log.Printf("[Relay] Webhook returned %d (attempt %d)", resp.StatusCode, attempt+1)
+		slog.Warn("webhook returned non-2xx",
+			"app_id", appID,
+			"status", resp.StatusCode,
+			"attempt", attempt+1)
 	}
-	log.Printf("[Relay] Webhook delivery to %s failed after 3 attempts", url)
+	slog.Error("webhook delivery failed after retries",
+		"app_id", appID,
+		"url", url,
+		"attempts", 3)
 }
 
 // sign computes HMAC-SHA256 of the body using the app secret.

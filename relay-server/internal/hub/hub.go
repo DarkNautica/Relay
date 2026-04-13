@@ -2,9 +2,10 @@ package hub
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/relayhq/relay-server/internal/apps"
@@ -57,6 +58,12 @@ type Hub struct {
 
 	// Webhook dispatcher
 	Webhooks *webhook.Dispatcher
+
+	// Per-app connection counts for limit enforcement.
+	// Atomic counters allow the WebSocket handler to check limits
+	// without going through the single-threaded event loop.
+	appConnMu     sync.Mutex
+	appConnCounts map[string]*atomic.Int64
 }
 
 // EventLogEntry records a published event for the dashboard.
@@ -75,15 +82,60 @@ func channelKey(appID, channelName string) string {
 // NewHub creates a Hub ready to be started with Run().
 func NewHub(cfg *config.Config, registry *apps.AppRegistry) *Hub {
 	return &Hub{
-		clients:    make(map[string]*Client),
-		channels:   make(map[string]*Channel),
-		cfg:        cfg,
-		registry:   registry,
-		register:   make(chan *Client, 256),
-		unregister: make(chan *Client, 256),
-		incoming:   make(chan *incomingMessage, 1024),
-		Publish:    make(chan *protocol.PublishRequest, 1024),
+		clients:       make(map[string]*Client),
+		channels:      make(map[string]*Channel),
+		cfg:           cfg,
+		registry:      registry,
+		register:      make(chan *Client, 256),
+		unregister:    make(chan *Client, 256),
+		incoming:      make(chan *incomingMessage, 1024),
+		Publish:       make(chan *protocol.PublishRequest, 1024),
+		appConnCounts: make(map[string]*atomic.Int64),
 	}
+}
+
+// --- Per-App Connection Limit Enforcement ---
+
+// getAppCounter returns the atomic counter for an app, creating it if needed.
+func (h *Hub) getAppCounter(appID string) *atomic.Int64 {
+	h.appConnMu.Lock()
+	counter, ok := h.appConnCounts[appID]
+	if !ok {
+		counter = &atomic.Int64{}
+		h.appConnCounts[appID] = counter
+	}
+	h.appConnMu.Unlock()
+	return counter
+}
+
+// TryIncrementConns atomically checks whether the app is under its connection
+// limit and increments the counter if so. Returns (currentCount, true) on
+// success, or (currentCount, false) if the limit has been reached.
+// If maxConns is 0, the limit is treated as unlimited.
+func (h *Hub) TryIncrementConns(appID string, maxConns int) (int64, bool) {
+	counter := h.getAppCounter(appID)
+	for {
+		current := counter.Load()
+		if maxConns > 0 && current >= int64(maxConns) {
+			return current, false
+		}
+		if counter.CompareAndSwap(current, current+1) {
+			return current + 1, true
+		}
+	}
+}
+
+// DecrementConns decrements the per-app connection counter.
+// Must be called exactly once for each successful TryIncrementConns call.
+func (h *Hub) DecrementConns(appID string) {
+	counter := h.getAppCounter(appID)
+	counter.Add(-1)
+}
+
+// AppConnCount returns the current connection count for an app.
+func (h *Hub) AppConnCount(appID string) int64 {
+	counter := h.getAppCounter(appID)
+	return counter.Load()
 }
 
 // Run starts the hub's event loop. This should be called in its own goroutine.
@@ -113,12 +165,15 @@ func (h *Hub) handleRegister(client *Client) {
 	count := len(h.clients)
 	h.mu.Unlock()
 
-	if h.cfg.Debug {
-		log.Printf("[Relay] Client connected: %s app=%s (total: %d)", client.SocketID, client.app.ID, count)
-	}
+	slog.Debug("client connected",
+		"socket_id", client.SocketID,
+		"app_id", client.app.ID,
+		"connections", count)
 
 	if err := client.sendConnectionEstablished(); err != nil {
-		log.Printf("[Relay] Error sending connection_established to %s: %v", client.SocketID, err)
+		slog.Error("failed to send connection_established",
+			"socket_id", client.SocketID,
+			"error", err.Error())
 	}
 }
 
@@ -155,18 +210,17 @@ func (h *Hub) handleUnregister(client *Client) {
 	}
 	h.mu.Unlock()
 
-	if h.cfg.Debug {
-		log.Printf("[Relay] Client disconnected: %s", client.SocketID)
-	}
+	slog.Debug("client disconnected", "socket_id", client.SocketID, "app_id", client.app.ID)
 }
 
 func (h *Hub) handleIncoming(im *incomingMessage) {
 	msg := im.message
 	client := im.client
 
-	if h.cfg.Debug {
-		log.Printf("[Relay] Incoming from %s: event=%s channel=%s", client.SocketID, msg.Event, msg.Channel)
-	}
+	slog.Debug("incoming message",
+		"socket_id", client.SocketID,
+		"event", msg.Event,
+		"channel", msg.Channel)
 
 	switch msg.Event {
 	case protocol.EventSubscribe, protocol.PusherEventSubscribe:
@@ -245,7 +299,8 @@ func (h *Hub) handleSubscribe(client *Client, msg *protocol.Message) {
 
 	successMsg, err := protocol.NewMessage(protocol.EventSubscriptionSucceeded, channelName, successData)
 	if err != nil {
-		log.Printf("[Relay] Error building subscription_succeeded: %v", err)
+		slog.Error("failed to build subscription_succeeded",
+			"error", err.Error())
 		return
 	}
 	client.SendMessage(successMsg)
@@ -273,9 +328,10 @@ func (h *Hub) handleSubscribe(client *Client, msg *protocol.Message) {
 		}
 	}
 
-	if h.cfg.Debug {
-		log.Printf("[Relay] Client %s subscribed to %s", client.SocketID, channelName)
-	}
+	slog.Debug("client subscribed",
+		"socket_id", client.SocketID,
+		"channel", channelName,
+		"app_id", client.app.ID)
 }
 
 func (h *Hub) handleUnsubscribe(client *Client, msg *protocol.Message) {
@@ -382,9 +438,10 @@ func (h *Hub) handlePublish(req *protocol.PublishRequest) {
 	}
 	h.mu.Unlock()
 
-	if h.cfg.Debug {
-		log.Printf("[Relay] Published event=%s channel=%s app=%s", req.Event, req.Channel, req.AppID)
-	}
+	slog.Debug("published event",
+		"event", req.Event,
+		"channel", req.Channel,
+		"app_id", req.AppID)
 }
 
 // --- Presence Helpers ---

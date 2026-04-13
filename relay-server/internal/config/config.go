@@ -2,7 +2,7 @@ package config
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 
@@ -43,7 +43,9 @@ type Config struct {
 func Load() *Config {
 	// Attempt to load .env — not an error if it doesn't exist
 	if err := godotenv.Load(); err != nil {
-		log.Println("[Relay] No .env file found, using environment variables")
+		// slog may not be initialized yet at this point, so this is a no-op
+		// The caller will log this info after slog is configured
+		_ = err
 	}
 
 	return &Config{
@@ -81,7 +83,7 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("RELAY_APP_SECRET is required")
 	}
 	if c.AppSecret == "relay-secret-change-me" {
-		log.Println("[Relay] WARNING: Using default app secret. Set RELAY_APP_SECRET in production.")
+		slog.Warn("using default app secret — set RELAY_APP_SECRET in production")
 	}
 	return nil
 }

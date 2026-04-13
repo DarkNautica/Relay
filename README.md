@@ -1,5 +1,7 @@
 # ⚡ Relay
 
+[![Release](https://img.shields.io/github/v/release/DarkNautica/Relay?label=latest)](https://github.com/DarkNautica/Relay/releases)
+
 **The open source, self-hostable real-time WebSocket server.**
 
 Replace Pusher and Ably with a single binary you control. Zero vendor lock-in.
@@ -159,6 +161,46 @@ relay.publish('chat', 'new-message', {'text': 'Hello!'})
 
 ---
 
+## Connection Limit Enforcement
+
+Each app in `apps.json` can define a `max_connections` limit. When the limit is
+reached, new WebSocket connections for that app are rejected at handshake time
+with close code `4100` ("Over connection limit"). Other apps are unaffected.
+
+If `max_connections` is `0` or omitted, the app has no connection limit.
+
+```json
+[
+  {
+    "id": "my-app",
+    "key": "my-key",
+    "secret": "my-secret",
+    "max_connections": 1000
+  }
+]
+```
+
+---
+
+## Logging
+
+Relay emits structured JSON logs (one JSON object per line) to stdout, ready for
+log aggregators like Loki, Datadog, or CloudWatch.
+
+Every log line includes `level`, `time`, and `msg`. Context fields like
+`app_id`, `socket_id`, `channel`, `connections`, and `limit` are added where
+relevant.
+
+```jsonl
+{"time":"2026-04-12T15:30:00Z","level":"INFO","msg":"server listening","addr":"0.0.0.0:6001"}
+{"time":"2026-04-12T15:30:01Z","level":"WARN","msg":"connection rejected: app at connection limit","app_id":"my-app","app_key":"my-key","connections":1000,"limit":1000}
+```
+
+Set `RELAY_DEBUG=true` to include `DEBUG`-level messages (connection events,
+message routing, subscription details).
+
+---
+
 ## Channel Types
 
 | Type     | Prefix      | Auth Required | Members Tracked |
@@ -190,9 +232,9 @@ relay.publish('chat', 'new-message', {'text': 'Hello!'})
 - [x] HTTP publish API
 - [x] JS client SDK
 - [x] Laravel driver
-- [ ] Web dashboard
-- [ ] Channel history / replay
-- [ ] Webhook support
+- [x] Web dashboard
+- [x] Channel history / replay
+- [x] Webhook support
 - [ ] Horizontal scaling (Redis)
 - [x] Node.js server SDK
 - [x] Rails driver

@@ -1,7 +1,8 @@
 package main
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,22 +15,34 @@ import (
 	"github.com/relayhq/relay-server/internal/webhook"
 )
 
+// version is set at build time via -ldflags "-X main.version=vX.Y.Z".
+var version = "dev"
+
 func main() {
+	// Structured JSON logging for all server output
+	logLevel := slog.LevelInfo
 	cfg := config.Load()
+	if cfg.Debug {
+		logLevel = slog.LevelDebug
+	}
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
+	slog.SetDefault(logger)
+
+	slog.Info("starting relay server", "version", version)
 
 	if cfg.Debug {
-		log.Printf("[Relay] Debug mode enabled")
+		slog.Debug("debug mode enabled")
 	}
 
 	// Load app registry: try apps.json first, fall back to .env config
 	registry, err := apps.LoadFromFile("apps.json")
 	if err != nil {
 		if cfg.Debug {
-			log.Printf("[Relay] No apps.json found, using single app from environment")
+			slog.Debug("no apps.json found, using single app from environment")
 		}
 		registry = apps.LoadFromConfig(cfg)
 	} else {
-		log.Printf("[Relay] Loaded %d app(s) from apps.json", len(registry.All()))
+		slog.Info("loaded apps from apps.json", "count", len(registry.All()))
 	}
 
 	h := hub.NewHub(cfg, registry)
@@ -40,16 +53,19 @@ func main() {
 	srv := server.New(cfg, h, registry)
 
 	go func() {
-		log.Printf("[Relay] Server starting on %s", cfg.Addr())
+		slog.Info("server listening", "addr", cfg.Addr())
 		for _, app := range registry.All() {
-			log.Printf("[Relay] App: id=%s key=%s", app.ID, app.Key)
+			slog.Info("app registered", "app_id", app.ID, "app_key", app.Key,
+				"max_connections", app.MaxConnections)
 		}
 		if cfg.DashboardEnabled {
-			log.Printf("[Relay] Dashboard: http://%s%s", cfg.Addr(), cfg.DashboardPath)
+			slog.Info("dashboard enabled",
+				"url", fmt.Sprintf("http://%s%s", cfg.Addr(), cfg.DashboardPath))
 		}
 
 		if err := srv.Start(); err != nil {
-			log.Fatalf("[Relay] Server error: %v", err)
+			slog.Error("server error", "error", err.Error())
+			os.Exit(1)
 		}
 	}()
 
@@ -57,8 +73,8 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("[Relay] Shutting down gracefully...")
+	slog.Info("shutting down gracefully")
 	h.Shutdown()
 	srv.Shutdown()
-	log.Println("[Relay] Goodbye.")
+	slog.Info("shutdown complete")
 }

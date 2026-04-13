@@ -3,7 +3,7 @@ package hub
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"math/rand"
 	"time"
 
@@ -94,7 +94,9 @@ func (c *Client) SendRaw(data []byte) {
 	select {
 	case c.send <- data:
 	default:
-		log.Printf("[Relay] Client %s send buffer full, dropping message", c.SocketID)
+		slog.Warn("send buffer full, dropping message",
+			"socket_id", c.SocketID,
+			"app_id", c.app.ID)
 	}
 }
 
@@ -102,6 +104,8 @@ func (c *Client) SendRaw(data []byte) {
 // This runs in a dedicated goroutine per client.
 func (c *Client) readPump() {
 	defer func() {
+		// Decrement the per-app connection counter before unregistering
+		c.hub.DecrementConns(c.app.ID)
 		c.hub.unregister <- c
 		c.conn.Close()
 	}()
@@ -117,7 +121,10 @@ func (c *Client) readPump() {
 		_, rawMessage, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("[Relay] Client %s unexpected close: %v", c.SocketID, err)
+				slog.Warn("unexpected websocket close",
+					"socket_id", c.SocketID,
+					"app_id", c.app.ID,
+					"error", err.Error())
 			}
 			break
 		}
@@ -125,7 +132,10 @@ func (c *Client) readPump() {
 		// Parse the incoming message
 		var msg protocol.Message
 		if err := json.Unmarshal(rawMessage, &msg); err != nil {
-			log.Printf("[Relay] Client %s invalid message: %v", c.SocketID, err)
+			slog.Warn("invalid message from client",
+				"socket_id", c.SocketID,
+				"app_id", c.app.ID,
+				"error", err.Error())
 			continue
 		}
 

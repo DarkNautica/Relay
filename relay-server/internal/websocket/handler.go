@@ -2,7 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
@@ -65,9 +65,34 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Enforce per-app connection limit before upgrading.
+	// If max_connections is 0, the limit is treated as unlimited.
+	count, allowed := h.hub.TryIncrementConns(app.ID, app.MaxConnections)
+	if !allowed {
+		slog.Warn("connection rejected: app at connection limit",
+			"app_id", app.ID,
+			"app_key", app.Key,
+			"connections", count,
+			"limit", app.MaxConnections)
+
+		// Upgrade then reject with close code 4100 (Pusher-compatible: over capacity)
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(4100, "Over connection limit"))
+		conn.Close()
+		return
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("[Relay] WebSocket upgrade failed: %v", err)
+		// Upgrade failed — decrement the counter we just incremented
+		h.hub.DecrementConns(app.ID)
+		slog.Error("websocket upgrade failed",
+			"app_id", app.ID,
+			"error", err.Error())
 		return
 	}
 
